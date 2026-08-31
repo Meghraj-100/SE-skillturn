@@ -1,0 +1,132 @@
+.navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    z-index: 1000;
+
+    background: var(--navbar-background);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--glass-border);
+    transition: all 0.3s ease;
+}
+
+.logo {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--md-sys-color-primary);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.navLinks {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+}
+
+.liquidLink {
+    position: relative;
+    padding: 8px 16px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--md-sys-color-on-surface);
+    text-decoration: none;
+    border-radius: 20px;
+    background: var(--liquid-bg);
+    border: 1px solid var(--liquid-border);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+}
+
+.liquidLink::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(120deg,
+            transparent,
+            var(--liquid-shine),
+            transparent);
+    transform: translateX(-100%);
+    transition: transform 0.5s ease;
+}
+
+.liquidLink:hover {
+    background: var(--liquid-hover-bg);
+    border-color: var(--liquid-hover-border);
+    box-shadow: 0 0 15px var(--liquid-hover-shadow);
+    color: var(--md-sys-color-primary);
+}
+
+.liquidLink:hover::before {
+    transform: translateX(100%);
+}
+
+.mobileMenuBtn {
+    display: none;
+    background: none;
+    border: none;
+    color: var(--md-sys-color-on-surface);
+    cursor: pointer;
+    padding: 8px;
+}
+
+.mobileThemeToggle {
+    display: none;
+}
+
+.mobileMenu {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .navLinks {
+        display: none;
+    }
+
+    .mobileMenuBtn {
+        display: block;
+    }
+
+    .mobileThemeToggle {
+        display: block;
+    }
+
+    .mobileMenu {
+        display: flex;
+        flex-direction: column;
+        position: fixed;
+        top: 64px;
+        left: 0;
+        right: 0;
+        background: var(--md-sys-color-surface);
+        border-bottom: 1px solid var(--glass-border);
+        padding: 16px;
+        gap: 16px;
+        transform: translateY(-100%);
+        opacity: 0;
+        transition: all 0.3s ease;
+        z-index: 999;
+        pointer-events: none;
+    }
+
+    .mobileMenu.open {
+        transform: translateY(0);
+        opacity: 1;
+        pointer-events: auto;
+        display: flex;
+    }
+}
