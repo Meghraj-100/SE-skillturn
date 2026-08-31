@@ -1,0 +1,16 @@
+.glassContainer {
+    background: var(--glass-background);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    border-radius: 16px;
+    padding: 24px;
+    color: var(--md-sys-color-on-surface);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.glassContainer:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.45);
+}
