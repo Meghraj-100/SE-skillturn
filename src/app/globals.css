@@ -137,9 +137,22 @@ a {
   box-shadow: var(--glass-shadow);
 }
 
-/* Glow Effect for Dark Mode */
-[data-theme='dark'] .glow-on-hover {
+.glass-nav {
+  background: var(--navbar-background);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--glass-border);
+  box-shadow: 0 4px 24px 0 rgba(0, 0, 0, 0.06);
+}
+
+/* Glow Effect */
+.glow-on-hover {
   transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.glow-on-hover:hover {
+  box-shadow: 0 0 15px var(--liquid-hover-shadow);
+  border-color: var(--liquid-hover-border);
 }
 
 [data-theme='dark'] .glow-on-hover:hover {
