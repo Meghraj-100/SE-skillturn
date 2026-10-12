@@ -19,7 +19,7 @@ export const Navbar = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
   };
 
-  const getInitials = (name: string) => {
+  const getInitials = (name?: string) => {
     return name ? name.charAt(0).toUpperCase() : "?";
   };
 

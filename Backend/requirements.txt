@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+pymongo
+certifi
+python-jose[cryptography]
+passlib[argon2]
+python-multipart
+google-generativeai
+numpy
+requests
+python-dotenv

@@ -3,7 +3,7 @@
 This document describes the merged schema structure implemented for SkillTurn.
 
 ## 1. Authentication & Users (Admin DB)
-**Collection**: [users](file:///Users/kanishkchaurasia/Documents/studentPortal/backend/login.py#116-119)
+**Collection**: [users]
 - `username`: String (Unique)
 - `email`: String
 - `hashed_password`: String (Argon2)
@@ -23,17 +23,17 @@ This document describes the merged schema structure implemented for SkillTurn.
 - `gpa`: Float
 - `roll_no`: String
 - `college_email`: String
-- [skills](file:///Users/kanishkchaurasia/Documents/studentPortal/backend/CRUD.py#233-238): (Managed in [skills](file:///Users/kanishkchaurasia/Documents/studentPortal/backend/CRUD.py#233-238) collection)
+- [skills]
 
-### Student Skills ([skills](file:///Users/kanishkchaurasia/Documents/studentPortal/backend/CRUD.py#233-238))
+### Student Skills ([skills])
 - `user_id`: ObjectId
-- [skills](file:///Users/kanishkchaurasia/Documents/studentPortal/backend/CRUD.py#233-238): List[Object]
+- [skills]
   - `name`: String
   - `verified`: ObjectId String (Verifier ID) or None
 
-### Student Projects ([projects](file:///Users/kanishkchaurasia/Documents/studentPortal/backend/CRUD.py#248-253))
+### Student Projects ([projects])
 - `user_id`: ObjectId
-- [projects](file:///Users/kanishkchaurasia/Documents/studentPortal/backend/CRUD.py#248-253): List[Object]
+- [projects]
   - `title`: String
   - `description`: String
   - `project_link`: String
@@ -64,7 +64,7 @@ This document describes the merged schema structure implemented for SkillTurn.
 - `company_website`: String
 - `linkedin_profile`: String
 
-### Jobs ([jobs](file:///Users/kanishkchaurasia/Documents/studentPortal/backend/CRUD.py#283-285))
+### Jobs ([jobs])
 - `recruiter_id`: ObjectId (Ref to Recruiter User ID)
 - `job_title`: String
 - `description`: String
@@ -73,7 +73,7 @@ This document describes the merged schema structure implemented for SkillTurn.
 - `deadline`: DateTime
 - `posted_at`: DateTime
 
-### Applications ([applications](file:///Users/kanishkchaurasia/Documents/studentPortal/backend/CRUD.py#302-307))
+### Applications ([applications])
 - `user_id`: ObjectId (Student)
 - `job_id`: ObjectId (Job)
 - `status`: Enum ("applied", "shortlisted", "selected", "rejected")
