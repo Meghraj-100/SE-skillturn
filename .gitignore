@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+studentPortal/
 
 # next.js
 /.next/
@@ -47,3 +48,4 @@ next-env.d.ts
 schema.md
 **/schema.md
 Backend/schema.md
+task-distribution.md
