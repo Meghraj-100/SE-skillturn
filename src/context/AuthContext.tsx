@@ -1,94 +1,158 @@
 "use client";
 
-import React, { createContext, useContext, useState } from "react";
-
-export type Role = "student" | "faculty" | "recruiter" | null;
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 export interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: Exclude<Role, null>;
-  avatarUrl?: string;
-  title?: string;
+    id: string;
+    username: string;
+    email: string;
+    full_name: string;
+    role: "student" | "faculty" | "admin" | "recruiter";
+    is_active: boolean;
+    is_verified: boolean;
+    created_at: string;
 }
 
-const MOCK_USERS: Record<Exclude<Role, null>, User> = {
-  student: {
-    id: "usr_student_1",
-    name: "Alex Rivera",
-    email: "alex.rivera@university.edu",
-    role: "student",
-    title: "Computer Science Senior",
-  },
-  faculty: {
-    id: "usr_faculty_1",
-    name: "Dr. Sarah Chen",
-    email: "sarah.chen@university.edu",
-    role: "faculty",
-    title: "Professor of AI & Robotics",
-  },
-  recruiter: {
-    id: "usr_recruiter_1",
-    name: "Marcus Vance",
-    email: "marcus.vance@techcorp.io",
-    role: "recruiter",
-    title: "Lead Tech Recruiter",
-  },
-};
+export interface Student extends User {
+    collegeName: string;
+    degree: string;
+    branch: string;
+    yearsOfStudy: number;
+    expectedGraduationYear: number;
+    rollNumber: string;
+    collegeEmail: string;
+}
+
+export interface Faculty extends User {
+    institution: string;
+    department: string;
+    designation: string;
+    profileLink: string;
+    experience: number;
+}
+
+interface RegisterData {
+    username: string;
+    email: string;
+    full_name: string;
+    password: string;
+    role: "student" | "faculty" | "admin" | "recruiter";
+}
 
 interface AuthContextType {
-  user: User | null;
-  role: Role;
-  setRole: (role: Role) => void;
-  login: (role: Exclude<Role, null>) => void;
-  logout: () => void;
-  isAuthenticated: boolean;
+    user: User | null;
+    loading: boolean;
+    login: (username: string, password: string) => Promise<User>;
+    register: (data: RegisterData) => Promise<User>;
+    logout: () => void;
+    isAuthenticated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [role, setRoleState] = useState<Role>("student");
-  const [user, setUser] = useState<User | null>(MOCK_USERS.student);
+    const [user, setUser] = useState<User | null>(null);
+    const [loading, setLoading] = useState(true);
+    const router = useRouter();
+    const API_URL = 'http://127.0.0.1:8000';
 
-  const setRole = (newRole: Role) => {
-    setRoleState(newRole);
-    if (newRole) {
-      setUser(MOCK_USERS[newRole]);
-    } else {
-      setUser(null);
+    const fetchUser = async (token: string): Promise<User | null> => {
+        try {
+            const response = await fetch(`${API_URL}/users/me/`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (response.ok) {
+                const userData = await response.json();
+                setUser(userData);
+                return userData;
+            } else {
+                logout();
+                return null;
+            }
+        } catch (error) {
+            console.error('Failed to fetch user:', error);
+            logout();
+            return null;
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (token) {
+            fetchUser(token);
+        } else {
+            setLoading(false);
+        }
+    }, []);
+
+    const login = async (username: string, password: string): Promise<User> => {
+        // OAuth2PasswordRequestForm expects x-www-form-urlencoded data
+        const formData = new URLSearchParams();
+        formData.append('grant_type', 'password');
+        formData.append('username', username);
+        formData.append('password', password);
+
+        const response = await fetch(`${API_URL}/token`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Login failed');
+        }
+
+        const data = await response.json();
+        localStorage.setItem('token', data.access_token);
+        const userData = await fetchUser(data.access_token);
+        if (!userData) throw new Error('Failed to fetch user data');
+        return userData;
+    };
+
+    const register = async (data: RegisterData): Promise<User> => {
+        const response = await fetch(`${API_URL}/register`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Registration failed');
+        }
+        
+        // After successful registration, log the user in automatically
+        return await login(data.username, data.password);
+    };
+
+    const logout = () => {
+        localStorage.removeItem('token');
+        setUser(null);
+        router.push('/login');
+    };
+
+    return (
+        <AuthContext.Provider value={{ user, loading, login, register, logout, isAuthenticated: !!user }}>
+            {children}
+        </AuthContext.Provider>
+    );
+}
+
+export const useAuth = () => {
+    const context = useContext(AuthContext);
+    if (context === undefined) {
+        throw new Error('useAuth must be used within an AuthProvider');
     }
-  };
-
-  const login = (roleToLogin: Exclude<Role, null>) => {
-    setRole(roleToLogin);
-  };
-
-  const logout = () => {
-    setRole(null);
-  };
-
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        role,
-        setRole,
-        login,
-        logout,
-        isAuthenticated: !!user,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
-}
+    return context;
+};
