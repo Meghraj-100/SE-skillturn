@@ -1,4 +1,4 @@
-# SkillTurn MongoDB Schema Documentation
+# MongoDB Union Schema Documentation
 
 This document describes the merged schema structure implemented for SkillTurn.
 
