@@ -6,6 +6,7 @@ import ScrollReveal from "@/components/ui/ScrollReveal";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import toast from "react-hot-toast";
 
 const PREDEFINED_TECHNOLOGIES = [
     "JavaScript", "TypeScript", "React", "Next.js", "Node.js",
@@ -53,11 +54,18 @@ export default function AddProjectPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (formData.technologies.length === 0) {
+            toast.error("Please select at least one technology");
+            return;
+        }
+
         setLoading(true);
 
         try {
             const token = localStorage.getItem('token');
             if (!token) {
+                toast.error("You are not logged in. Redirecting to login...");
                 router.push('/login');
                 return;
             }
@@ -85,12 +93,15 @@ export default function AddProjectPage() {
                 if (data.ai_verified) {
                     setAnalyzing(false);
                 }
+                toast.success("Project added successfully!");
                 router.push('/dashboard');
             } else {
-                console.error("Failed to add project");
+                const errData = await res.json().catch(() => ({}));
+                toast.error(errData.detail || "Failed to add project");
             }
         } catch (error) {
             console.error("Error adding project:", error);
+            toast.error("Could not connect to the backend server. Make sure it's running.");
         } finally {
             setLoading(false);
             setAnalyzing(false);
@@ -300,7 +311,7 @@ export default function AddProjectPage() {
                             <Button
                                 type="submit"
                                 variant="filled"
-                                disabled={!formData.title || !formData.description || formData.technologies.length === 0 || !formData.link || loading}
+                                disabled={loading}
                             >
                                 {loading ? '🤖 Analyzing & Adding...' : 'Add Project'}
                             </Button>

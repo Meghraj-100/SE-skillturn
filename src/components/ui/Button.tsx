@@ -13,13 +13,15 @@ export const Button = ({
     variant = 'filled',
     children,
     className = '',
+    disabled,
     ...props
 }: ButtonProps) => {
     return (
         <motion.button
             className={`${styles.button} ${styles[variant]} ${className}`}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+            whileHover={disabled ? undefined : { scale: 1.05 }}
+            whileTap={disabled ? undefined : { scale: 0.95 }}
+            disabled={disabled}
             suppressHydrationWarning
             {...props}
         >

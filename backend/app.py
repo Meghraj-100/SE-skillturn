@@ -24,26 +24,26 @@ app.include_router(register_router)
 try:
     from student import router as student_router
     app.include_router(student_router)
-except ImportError:
-    pass
+except Exception as e:
+    print(f"[ERROR] Failed to load student router: {e}")
 
 try:
     from faculty import router as faculty_router
     app.include_router(faculty_router)
-except ImportError:
-    pass
+except Exception as e:
+    print(f"[ERROR] Failed to load faculty router: {e}")
 
 try:
     from recruiter import router as recruiter_router
     app.include_router(recruiter_router)
-except ImportError:
-    pass
+except Exception as e:
+    print(f"[ERROR] Failed to load recruiter router: {e}")
 
 try:
     from opportunities import router as opportunities_router
     app.include_router(opportunities_router)
-except ImportError:
-    pass
+except Exception as e:
+    print(f"[ERROR] Failed to load opportunities router: {e}")
 
 @app.get("/")
 def read_root():
