@@ -1,13 +1,17 @@
+# pyrefly: ignore[missing-import]
 from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
+from bson import ObjectId
+from database import opportunities_collection, student_projects_collection
 from CRUD import (
     create_faculty_profile, update_user_verification, FacultyProfile, User,
     get_all_students, get_student_profile, get_student_skills, get_student_projects,
     update_student_skills, update_student_projects,
     get_faculty_profile,
-    get_projects_by_student, update_project_verification, get_project_by_id
+    get_projects_by_student, update_project_verification, get_project_by_id,
+    fix_mongo_id
 )
 from login import get_current_active_user, UserPublic
 
@@ -24,6 +28,17 @@ async def create_profile(profile: FacultyProfile, current_user: User = Depends(g
             detail="Only faculty members can create a faculty profile"
         )
 
+    # Validate faculty academic email domain (.edu, .ac.in, etc.)
+    if profile.official_email:
+        email_clean = profile.official_email.lower().strip()
+        academic_domains = (".edu", ".ac.in", ".edu.in", ".ac.uk", ".edu.au")
+        domain_part = email_clean.split("@")[-1] if "@" in email_clean else ""
+        if not any(domain_part.endswith(ad.lstrip(".")) for ad in academic_domains):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Official faculty email must belong to an academic domain (.edu, .ac.in, etc.)"
+            )
+
     # Overwrite user_id with current user's ID to ensure security
     profile.user_id = str(current_user.id)
     
@@ -31,10 +46,6 @@ async def create_profile(profile: FacultyProfile, current_user: User = Depends(g
     new_profile = create_faculty_profile(profile)
     
     # Update user verification status
-    update_user_verification(current_user.username, True)
-    
-    return new_profile
-
     update_user_verification(current_user.username, True)
     
     return new_profile
@@ -258,8 +269,17 @@ async def get_pending_projects(current_user: User = Depends(get_current_active_u
 
     return pending
 
+class ProjectVerificationRequest(BaseModel):
+    status: Optional[str] = "Approved"
+    feedback: Optional[str] = None
+    remarks: Optional[str] = None
+
 @router.patch("/faculty/verify-project/{project_id}")
-async def patch_verify_project(project_id: str, current_user: User = Depends(get_current_active_user)):
+async def patch_verify_project(
+    project_id: str,
+    payload: Optional[ProjectVerificationRequest] = None,
+    current_user: User = Depends(get_current_active_user)
+):
     if current_user.role != "faculty":
         raise HTTPException(status_code=403, detail="Access forbidden")
 
@@ -277,13 +297,111 @@ async def patch_verify_project(project_id: str, current_user: User = Depends(get
         if faculty_inst and student_inst and faculty_inst != student_inst:
             raise HTTPException(status_code=403, detail="You can only verify students from your institution")
 
-    result = update_project_verification(
-        project_id=project_id,
-        is_verified=True,
-        verified_by=str(current_user.id)
-    )
+    chosen_status = payload.status if payload and payload.status else "Approved"
+    feedback_text = (payload.feedback or payload.remarks) if payload else None
+    is_verified = chosen_status.lower() in ["approved", "verified", "true"]
 
-    if not result:
-        raise HTTPException(status_code=500, detail="Verification update failed")
+    if is_verified:
+        result = update_project_verification(
+            project_id=project_id,
+            is_verified=True,
+            verified_by=str(current_user.id)
+        )
+        if result is False:
+            raise HTTPException(status_code=400, detail="Cannot verify project with AI score below 50. Project quality is too low.")
+        if not result:
+            raise HTTPException(status_code=500, detail="Verification update failed")
+    else:
+        # Mark rejected in MongoDB collection
+        student_projects_collection.update_one(
+            {"_id": ObjectId(project_id)},
+            {"$set": {
+                "is_verified": False,
+                "verified_by": str(current_user.id),
+                "verification_status": "Rejected",
+                "updated_at": datetime.utcnow()
+            }}
+        )
 
-    return {"message": "Project verified successfully", "project_id": project_id}
+    # Save optional feedback or remarks
+    if feedback_text is not None:
+        student_projects_collection.update_one(
+            {"_id": ObjectId(project_id)},
+            {"$set": {
+                "faculty_feedback": feedback_text,
+                "feedback": feedback_text,
+                "remarks": feedback_text,
+                "updated_at": datetime.utcnow()
+            }}
+        )
+
+    return {
+        "message": f"Project verification {'approved' if is_verified else 'rejected'} successfully",
+        "project_id": project_id,
+        "is_verified": is_verified,
+        "feedback": feedback_text
+    }
+
+class FacultyOpportunityCreate(BaseModel):
+    title: str
+    description: str
+    type: Optional[str] = "Project"  # Research Project, Capstone Project, etc.
+    skills: List[str] = []
+    location: Optional[str] = "On-campus"
+    salary: Optional[str] = "Academic Credit"
+    stipend: Optional[str] = None
+    deadline: Optional[str] = None
+
+@router.post("/faculty/opportunities")
+async def create_faculty_opportunity(
+    opp_data: FacultyOpportunityCreate,
+    current_user: User = Depends(get_current_active_user)
+):
+    if current_user.role != "faculty":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only faculty members can post academic projects"
+        )
+
+    faculty_profile = get_faculty_profile(str(current_user.id))
+    organization_name = (faculty_profile.institute if faculty_profile and faculty_profile.institute else current_user.full_name) or "Academic Department"
+    stipend_val = opp_data.stipend or opp_data.salary or "Academic Credit"
+
+    doc = {
+        "title": opp_data.title,
+        "type": opp_data.type or "Project",
+        "organization": organization_name,
+        "faculty_id": str(current_user.id),
+        "faculty_name": current_user.full_name,
+        "description": opp_data.description,
+        "skills": opp_data.skills,
+        "location": opp_data.location or "On-campus",
+        "salary": stipend_val,
+        "stipend": stipend_val,
+        "deadline": opp_data.deadline,
+        "status": "Active",
+        "posted_date": datetime.utcnow(),
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow()
+    }
+
+    result = opportunities_collection.insert_one(doc)
+    doc["id"] = str(result.inserted_id)
+    doc["_id"] = str(result.inserted_id)
+    return doc
+
+@router.get("/faculty/opportunities")
+async def get_faculty_opportunities(
+    current_user: User = Depends(get_current_active_user)
+):
+    if current_user.role != "faculty":
+        raise HTTPException(status_code=403, detail="Access forbidden")
+
+    query = {"faculty_id": str(current_user.id)}
+    cursor = opportunities_collection.find(query).sort("created_at", -1)
+
+    items = []
+    for item in cursor:
+        items.append(fix_mongo_id(item))
+    return items
+

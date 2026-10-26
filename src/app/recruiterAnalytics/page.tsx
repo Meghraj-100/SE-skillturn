@@ -169,6 +169,13 @@ export default function RecruiterAnalyticsPage() {
     const router = useRouter();
     const [kpiData, setKpiData] = useState(KPI);
     const [funnelData, setFunnelData] = useState(FUNNEL_DATA);
+    const [collegeSelectionData, setCollegeSelectionData] = useState(COLLEGE_SELECTION_DATA);
+    const [roleSelectionData, setRoleSelectionData] = useState(ROLE_SELECTION_DATA);
+    const [skillDemandData, setSkillDemandData] = useState(SKILL_DEMAND_DATA);
+    const [scatterData, setScatterData] = useState(SCATTER_DATA);
+    const [qualityIndexData, setQualityIndexData] = useState(QUALITY_INDEX_DATA);
+    const [degreeData, setDegreeData] = useState(DEGREE_DATA);
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         const fetchAnalytics = async () => {
@@ -180,12 +187,22 @@ export default function RecruiterAnalyticsPage() {
                     });
                     if (res.ok) {
                         const data = await res.json();
-                        if (data.kpi) setKpiData(data.kpi);
-                        if (data.funnel) setFunnelData(data.funnel);
+                        if (data.kpi && data.kpi.length > 0) setKpiData(data.kpi);
+                        if (data.funnel && data.funnel.length > 0) setFunnelData(data.funnel);
+                        if (data.skillDemand && data.skillDemand.length > 0) setSkillDemandData(data.skillDemand);
+                        if (data.collegeSelection && data.collegeSelection.length > 0) setCollegeSelectionData(data.collegeSelection);
+                        if (data.roleSelection && data.roleSelection.length > 0) setRoleSelectionData(data.roleSelection);
+                        if (data.degreeData && data.degreeData.length > 0) setDegreeData(data.degreeData);
+                        if (data.scatterData && data.scatterData.length > 0) setScatterData(data.scatterData);
+                        if (data.qualityIndex && data.qualityIndex.length > 0) setQualityIndexData(data.qualityIndex);
                     }
                 } catch (e) {
                     console.error("Failed to fetch analytics", e);
+                } finally {
+                    setIsLoading(false);
                 }
+            } else {
+                setIsLoading(false);
             }
         };
         fetchAnalytics();
@@ -283,7 +300,7 @@ export default function RecruiterAnalyticsPage() {
                         <p style={chartSubtitleStyle}>Shortlisted vs Selected per college</p>
                         <div style={{ flex: 1, minHeight: "300px" }}>
                             <ResponsiveContainer width="100%" height={300}>
-                                <BarChart data={COLLEGE_SELECTION_DATA} barGap={4}>
+                                <BarChart data={collegeSelectionData} barGap={4}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.15)" />
                                     <XAxis dataKey="college" tick={{ fontSize: 12 }} />
                                     <YAxis tick={{ fontSize: 12 }} />
@@ -356,7 +373,7 @@ export default function RecruiterAnalyticsPage() {
                             </div>
                         </div>
                         <div style={{ textAlign: "center", fontSize: "0.85rem", color: "var(--md-sys-color-secondary)", fontWeight: 500 }}>
-                            Overall conversion: <span style={{ fontWeight: 700, color: "var(--md-sys-color-primary)" }}>{((funnelData[funnelData.length - 1].value / funnelData[0].value) * 100).toFixed(1)}%</span>
+                            Overall conversion: <span style={{ fontWeight: 700, color: "var(--md-sys-color-primary)" }}>{funnelData[0]?.value ? ((funnelData[funnelData.length - 1].value / funnelData[0].value) * 100).toFixed(1) : 0}%</span>
                         </div>
                     </GlassContainer>
                 </ScrollReveal>
@@ -368,7 +385,7 @@ export default function RecruiterAnalyticsPage() {
                         <p style={chartSubtitleStyle}>Selection rate per job role</p>
                         <div style={{ flex: 1, minHeight: "300px" }}>
                             <ResponsiveContainer width="100%" height={300}>
-                                <BarChart data={ROLE_SELECTION_DATA} layout="vertical" barSize={20}>
+                                <BarChart data={roleSelectionData} layout="vertical" barSize={20}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.15)" />
                                     <XAxis type="number" tick={{ fontSize: 12 }} unit="%" />
                                     <YAxis dataKey="role" type="category" tick={{ fontSize: 11 }} width={120} />
@@ -387,7 +404,7 @@ export default function RecruiterAnalyticsPage() {
                         <p style={chartSubtitleStyle}>% students with skill vs % actually hired</p>
                         <div style={{ flex: 1, minHeight: "300px" }}>
                             <ResponsiveContainer width="100%" height={300}>
-                                <BarChart data={SKILL_DEMAND_DATA} barGap={2}>
+                                <BarChart data={skillDemandData} barGap={2}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.15)" />
                                     <XAxis dataKey="skill" tick={{ fontSize: 11 }} />
                                     <YAxis tick={{ fontSize: 12 }} unit="%" />
@@ -416,13 +433,13 @@ export default function RecruiterAnalyticsPage() {
                                     <Legend />
                                     <Scatter
                                         name="Selected"
-                                        data={SCATTER_DATA.filter(d => d.selected)}
+                                        data={scatterData.filter(d => d.selected)}
                                         fill="#22c55e"
                                         shape="circle"
                                     />
                                     <Scatter
                                         name="Not Selected"
-                                        data={SCATTER_DATA.filter(d => !d.selected)}
+                                        data={scatterData.filter(d => !d.selected)}
                                         fill="#ef4444"
                                         shape="diamond"
                                     />
@@ -438,7 +455,7 @@ export default function RecruiterAnalyticsPage() {
                         <h3 style={chartTitleStyle}>🏆 Institution Talent Quality Index</h3>
                         <p style={chartSubtitleStyle}>Composite score: shortlist rate, selection rate, skill match</p>
                         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", flex: 1, justifyContent: "center" }}>
-                            {QUALITY_INDEX_DATA.map((item, i) => (
+                            {qualityIndexData.map((item, i) => (
                                 <div key={item.college} style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
                                     <span style={{ fontSize: "1.2rem", width: "28px", textAlign: "center" }}>
                                         {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "4️⃣"}
@@ -475,7 +492,7 @@ export default function RecruiterAnalyticsPage() {
                             <ResponsiveContainer width="100%" height={300}>
                                 <PieChart>
                                     <Pie
-                                        data={DEGREE_DATA}
+                                        data={degreeData}
                                         cx="50%" cy="50%"
                                         innerRadius={60} outerRadius={110}
                                         paddingAngle={3}
@@ -483,7 +500,7 @@ export default function RecruiterAnalyticsPage() {
                                         label={({ name, value }: any) => `${name} ${value}%`}
                                         labelLine={false}
                                     >
-                                        {DEGREE_DATA.map((_, index) => (
+                                        {degreeData.map((_, index) => (
                                             <Cell key={`cell-${index}`} fill={DEGREE_COLORS[index % DEGREE_COLORS.length]} />
                                         ))}
                                     </Pie>

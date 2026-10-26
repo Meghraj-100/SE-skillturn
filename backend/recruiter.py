@@ -31,8 +31,10 @@ from database import (
     users_collection,
     student_profiles_collection,
     student_skills_collection,
-    student_projects_collection
+    student_projects_collection,
+    opportunities_collection
 )
+from CRUD import fix_mongo_id
 from ai_utils import calculate_match_score
 
 router = APIRouter()
@@ -182,6 +184,7 @@ async def get_dashboard(current_user: User = Depends(get_current_active_user)):
             "institution": student_profile.college if student_profile else "Unknown",
             "program": student_profile.degree if student_profile else "Unknown",
             "branch": student_profile.branch if student_profile else "Unknown",
+            "gpa": student_profile.gpa if student_profile and hasattr(student_profile, "gpa") else None,
             "skills": [s.name for s in student_skills.skills] if student_skills else [],
             "resumeLink": "#",
             "matchScore": final_match_score,
@@ -287,3 +290,326 @@ async def get_app_resume_data(app_id: str, current_user: User = Depends(get_curr
         "skills": [s.get("name") for s in skills_doc.get("skills", [])] if skills_doc else [],
         "projects": verified_projects
     }
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  RECRUITER JOB LIFECYCLE (EDIT & CLOSE)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _check_recruiter_ownership(opp: dict, current_user: User) -> bool:
+    if current_user.role == "admin":
+        return True
+    if current_user.role != "recruiter":
+        return False
+    recruiter_profile = get_recruiter_profile(str(current_user.id))
+    user_id = str(current_user.id)
+    company_id = str(recruiter_profile.company_id) if recruiter_profile and recruiter_profile.company_id else None
+
+    if opp.get("recruiter_id") and str(opp.get("recruiter_id")) == user_id:
+        return True
+    if company_id and opp.get("company_id") and str(opp.get("company_id")) == company_id:
+        return True
+    return False
+
+class RecruiterOpportunityUpdate(BaseModel):
+    deadline: Optional[str] = None
+    stipend: Optional[str] = None
+    salary: Optional[str] = None
+    description: Optional[str] = None
+
+@router.put("/opportunities/{id}")
+async def edit_opportunity(
+    id: str,
+    payload: RecruiterOpportunityUpdate,
+    current_user: User = Depends(get_current_active_user)
+):
+    try:
+        opp = opportunities_collection.find_one({"_id": ObjectId(id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid opportunity ID format")
+
+    if not opp:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+
+    if not _check_recruiter_ownership(opp, current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to edit this opportunity"
+        )
+
+    update_fields = {"updated_at": datetime.utcnow()}
+    if payload.deadline is not None:
+        update_fields["deadline"] = payload.deadline
+    if payload.description is not None:
+        update_fields["description"] = payload.description
+    stipend_val = payload.stipend if payload.stipend is not None else payload.salary
+    if stipend_val is not None:
+        update_fields["salary"] = stipend_val
+        update_fields["stipend"] = stipend_val
+
+    opportunities_collection.update_one(
+        {"_id": ObjectId(id)},
+        {"$set": update_fields}
+    )
+    updated = opportunities_collection.find_one({"_id": ObjectId(id)})
+    return fix_mongo_id(updated)
+
+@router.patch("/opportunities/{id}/close")
+async def close_opportunity_endpoint(
+    id: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    try:
+        opp = opportunities_collection.find_one({"_id": ObjectId(id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid opportunity ID format")
+
+    if not opp:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+
+    if not _check_recruiter_ownership(opp, current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not authorized to close this opportunity"
+        )
+
+    opportunities_collection.update_one(
+        {"_id": ObjectId(id)},
+        {"$set": {
+            "status": "Closed",
+            "is_active": False,
+            "updated_at": datetime.utcnow()
+        }}
+    )
+    return {"message": "Opportunity closed successfully", "id": id, "status": "Closed"}
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  RECRUITER ANALYTICS (MONGODB AGGREGATION PIPELINES)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@router.get("/recruiter/analytics")
+async def get_recruiter_analytics(current_user: User = Depends(get_current_active_user)):
+    if current_user.role not in ["recruiter", "admin"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    recruiter_profile = get_recruiter_profile(str(current_user.id))
+    company_id = recruiter_profile.company_id if recruiter_profile else None
+    user_id_str = str(current_user.id)
+
+    # 1. Fetch relevant opportunities for this recruiter / company
+    if current_user.role == "admin":
+        opp_cursor = opportunities_collection.find({})
+    else:
+        opp_or = [{"recruiter_id": user_id_str}]
+        if company_id:
+            opp_or.append({"company_id": str(company_id)})
+        opp_cursor = opportunities_collection.find({"$or": opp_or})
+    
+    opportunities = list(opp_cursor)
+    opp_ids = [str(o["_id"]) for o in opportunities]
+    total_jobs = len(opportunities)
+    active_jobs = sum(1 for o in opportunities if o.get("status", "Active").lower() == "active")
+
+    # Match stage for applications
+    app_match = {"job_id": {"$in": opp_ids}} if opp_ids else {}
+
+    # 2. Application Conversion & Status Pipeline (MongoDB Aggregation)
+    status_pipeline = [
+        {"$match": app_match},
+        {"$group": {
+            "_id": {"$toLower": "$status"},
+            "count": {"$sum": 1}
+        }}
+    ]
+    status_agg = list(applications_collection.aggregate(status_pipeline))
+    status_counts = {item["_id"]: item["count"] for item in status_agg if item.get("_id")}
+
+    total_applications = sum(status_counts.values())
+    applied_count = status_counts.get("applied", 0) + status_counts.get("new", 0)
+    screening_count = status_counts.get("screening", 0)
+    shortlisted_count = status_counts.get("shortlisted", 0)
+    interview_count = status_counts.get("interview", 0)
+    selected_count = status_counts.get("selected", 0) + status_counts.get("offer", 0)
+
+    selection_rate = (selected_count / total_applications * 100) if total_applications > 0 else 0.0
+
+    # Funnel formatted for frontend
+    funnel_data = [
+        {"name": "Applied", "value": total_applications, "fill": "#6366f1"},
+        {"name": "Screening", "value": screening_count + shortlisted_count + interview_count + selected_count, "fill": "#8b5cf6"},
+        {"name": "Shortlisted", "value": shortlisted_count + interview_count + selected_count, "fill": "#a78bfa"},
+        {"name": "Interviewed", "value": interview_count + selected_count, "fill": "#c4b5fd"},
+        {"name": "Selected", "value": selected_count, "fill": "#10b981"}
+    ]
+
+    # 3. Comparison of requested skills with applicant skills (MongoDB Aggregation)
+    # A. Requested Skills aggregation from opportunities
+    requested_skills_agg = []
+    if opp_ids:
+        opp_match_ids = [ObjectId(oid) for oid in opp_ids if ObjectId.is_valid(oid)]
+        opp_skills_pipeline = [
+            {"$match": {"_id": {"$in": opp_match_ids}}},
+            {"$unwind": "$skills"},
+            {"$group": {
+                "_id": "$skills",
+                "demandCount": {"$sum": 1}
+            }},
+            {"$sort": {"demandCount": -1}}
+        ]
+        requested_skills_agg = list(opportunities_collection.aggregate(opp_skills_pipeline))
+
+    requested_skill_dict = {item["_id"]: item["demandCount"] for item in requested_skills_agg if item.get("_id")}
+
+    # B. Applicant skills aggregation from student_skills_collection
+    applicant_user_ids = applications_collection.distinct("user_id", app_match) if opp_ids else []
+    applicant_user_id_strs = [str(uid) for uid in applicant_user_ids]
+
+    applicant_skills_pipeline = [
+        {"$match": {"user_id": {"$in": applicant_user_id_strs}}},
+        {"$unwind": "$skills"},
+        {"$group": {
+            "_id": "$skills.name",
+            "studentsCount": {"$sum": 1}
+        }},
+        {"$sort": {"studentsCount": -1}}
+    ]
+    applicant_skills_agg = list(student_skills_collection.aggregate(applicant_skills_pipeline)) if applicant_user_id_strs else []
+    applicant_skill_dict = {item["_id"]: item["studentsCount"] for item in applicant_skills_agg if item.get("_id")}
+
+    # Combined skill comparison
+    all_skills = list(set(list(requested_skill_dict.keys()) + list(applicant_skill_dict.keys())))
+    skill_demand_data = []
+    for skill in all_skills[:10]:
+        skill_demand_data.append({
+            "skill": skill,
+            "students": applicant_skill_dict.get(skill, 0),
+            "hired": requested_skill_dict.get(skill, 0)
+        })
+
+    # 4. College Selection rate aggregation
+    college_selection_data = []
+    college_pipeline = [
+        {"$match": app_match},
+        {"$group": {
+            "_id": "$user_id",
+            "is_shortlisted": {"$max": {"$cond": [{"$in": [{"$toLower": "$status"}, ["shortlisted", "interview", "selected"]]}, 1, 0]}},
+            "is_selected": {"$max": {"$cond": [{"$in": [{"$toLower": "$status"}, ["selected", "offer"]]}, 1, 0]}}
+        }}
+    ]
+    user_app_agg = list(applications_collection.aggregate(college_pipeline)) if opp_ids else []
+    college_counts = {}
+    for item in user_app_agg:
+        prof = student_profiles_collection.find_one({"user_id": str(item["_id"])})
+        college_name = prof.get("college", "Other") if prof else "Other"
+        if not college_name or college_name.strip() == "":
+            college_name = "Other"
+        if college_name not in college_counts:
+            college_counts[college_name] = {"shortlisted": 0, "selected": 0}
+        college_counts[college_name]["shortlisted"] += item["is_shortlisted"]
+        college_counts[college_name]["selected"] += item["is_selected"]
+
+    for col, counts in list(college_counts.items())[:6]:
+        college_selection_data.append({
+            "college": col,
+            "shortlisted": counts["shortlisted"],
+            "selected": counts["selected"]
+        })
+
+    # 5. Role-wise selection %
+    role_selection_data = []
+    role_pipeline = [
+        {"$match": app_match},
+        {"$group": {
+            "_id": "$job_id",
+            "total": {"$sum": 1},
+            "selected": {"$sum": {"$cond": [{"$in": [{"$toLower": "$status"}, ["selected", "offer"]]}, 1, 0]}}
+        }}
+    ]
+    role_agg = list(applications_collection.aggregate(role_pipeline)) if opp_ids else []
+    for r in role_agg:
+        opp_doc = next((o for o in opportunities if str(o["_id"]) == str(r["_id"])), None)
+        title = opp_doc.get("title", "Role") if opp_doc else "Role"
+        pct = round((r["selected"] / r["total"] * 100), 1) if r["total"] > 0 else 0
+        role_selection_data.append({"role": title, "percentage": pct})
+
+    # 6. Degree distribution
+    degree_pipeline = [
+        {"$match": {"user_id": {"$in": applicant_user_id_strs}}},
+        {"$group": {
+            "_id": "$degree",
+            "value": {"$sum": 1}
+        }}
+    ]
+    degree_agg = list(student_profiles_collection.aggregate(degree_pipeline)) if applicant_user_id_strs else []
+    degree_data = [{"name": (d["_id"] or "Unknown"), "value": d["value"]} for d in degree_agg]
+
+    # 7. Scatter data (CGPA vs Match Score)
+    scatter_data = []
+    if opp_ids:
+        app_list = list(applications_collection.find(app_match))
+        for app in app_list:
+            prof = student_profiles_collection.find_one({"user_id": str(app.get("user_id"))})
+            if prof and prof.get("gpa"):
+                try:
+                    gpa_val = float(prof.get("gpa"))
+                    if 0 < gpa_val <= 10.0:
+                        is_sel = str(app.get("status", "")).lower() in ["selected", "offer"]
+                        score_val = float(app.get("match_score", 75.0) or 75.0)
+                        scatter_data.append({
+                            "cgpa": round(gpa_val, 2),
+                            "score": round(score_val, 1),
+                            "selected": is_sel
+                        })
+                except (ValueError, TypeError):
+                    pass
+
+    # 8. Institution Talent Quality Index
+    quality_index_data = []
+    for col, counts in list(college_counts.items())[:6]:
+        if col != "Other":
+            s_rate = (counts["selected"] / max(counts["shortlisted"], 1)) * 50
+            score_val = min(98, max(50, int(65 + s_rate)))
+            quality_index_data.append({"college": col, "score": score_val})
+    quality_index_data.sort(key=lambda x: x["score"], reverse=True)
+
+    # 9. Overall KPIs
+    kpi_summary = [
+        {
+            "label": "Total Applicants",
+            "value": f"{total_applications:,}",
+            "change": f"{total_applications} active pipeline",
+            "positive": True
+        },
+        {
+            "label": "Shortlisted",
+            "value": str(shortlisted_count),
+            "change": f"{shortlisted_count} candidates",
+            "positive": True
+        },
+        {
+            "label": "Selection Rate",
+            "value": f"{selection_rate:.1f}%",
+            "change": f"{selected_count} selected",
+            "positive": selected_count > 0
+        },
+        {
+            "label": "Active Openings",
+            "value": str(active_jobs),
+            "change": f"{total_jobs} total posted",
+            "positive": True
+        }
+    ]
+
+    return {
+        "kpi": kpi_summary,
+        "funnel": funnel_data,
+        "skillDemand": skill_demand_data,
+        "collegeSelection": college_selection_data,
+        "roleSelection": role_selection_data,
+        "degreeData": degree_data,
+        "scatterData": scatter_data,
+        "qualityIndex": quality_index_data,
+        "totalApplications": total_applications,
+        "activeJobs": active_jobs,
+        "selectedCount": selected_count
+    }
+

@@ -27,6 +27,16 @@ export default function FacultyForm() {
         return;
       }
     }
+    // Validate faculty academic email domain (.edu, .ac.in, etc.)
+    const emailLower = form.email.toLowerCase().trim();
+    const validDomains = [".edu", ".ac.in", ".edu.in", ".ac.uk", ".edu.au"];
+    const domainPart = emailLower.split("@")[1] || "";
+    const isValidAcademicDomain = validDomains.some(d => domainPart.endsWith(d.startsWith(".") ? d.slice(1) : d));
+
+    if (!isValidAcademicDomain) {
+      setError("Please provide a valid official academic email address (e.g. ending in .edu, .ac.in, or similar educational domain).");
+      return;
+    }
     setError("");
     try {
       const token = localStorage.getItem("token");

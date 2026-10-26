@@ -77,42 +77,90 @@ export default function PostedJobsPage() {
         if (!token) return;
 
         try {
-            const payload = {
-                title: data.position,
-                type: data.tenure === 'Full-time' ? 'Job' : (data.tenure as any),
-                organization: data.company,
-                description: data.description,
-                skills: [], // Could be expanded in modal
-                location: data.location,
-                salary: data.salary,
-                deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-            };
+            if (editingJob && editingJob.id) {
+                // PUT /opportunities/{id} - Recruiter job lifecycle update
+                const payload = {
+                    deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                    stipend: data.salary,
+                    salary: data.salary,
+                    description: data.description
+                };
 
-            const response = await fetch('http://localhost:8000/opportunities', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(payload)
-            });
+                const response = await fetch(`http://localhost:8000/opportunities/${editingJob.id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(payload)
+                });
 
-            if (response.ok) {
-                await fetchJobs(); // Refresh all
-                setIsModalOpen(false);
-                setEditingJob(null);
+                if (response.ok) {
+                    await fetchJobs();
+                    setIsModalOpen(false);
+                    setEditingJob(null);
+                    alert("✅ Job updated successfully!");
+                } else {
+                    const err = await response.json().catch(() => null);
+                    alert(`❌ Failed to update: ${err?.detail || 'Server error'}`);
+                }
+            } else {
+                const payload = {
+                    title: data.position,
+                    type: data.tenure === 'Full-time' ? 'Job' : (data.tenure as any),
+                    organization: data.company,
+                    description: data.description,
+                    skills: data.skills || [],
+                    location: data.location,
+                    salary: data.salary,
+                    deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+                };
+
+                const response = await fetch('http://localhost:8000/opportunities', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (response.ok) {
+                    await fetchJobs(); // Refresh all
+                    setIsModalOpen(false);
+                    setEditingJob(null);
+                    alert("✅ Job posted successfully!");
+                }
             }
         } catch (error) {
             console.error("Failed to save job:", error);
         }
     };
 
-    const handleJobDelete = () => {
-        // Not implemented on backend yet, but would go here
+    const handleJobDelete = async () => {
         if (!editingJob) return;
-        alert("Delete functionality coming soon!");
-        setIsModalOpen(false);
-        setEditingJob(null);
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        try {
+            // PATCH /opportunities/{id}/close - Recruiter close job
+            const res = await fetch(`http://localhost:8000/opportunities/${editingJob.id}/close`, {
+                method: 'PATCH',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (res.ok) {
+                await fetchJobs();
+                setIsModalOpen(false);
+                setEditingJob(null);
+                alert("✅ Job closed successfully!");
+            } else {
+                const err = await res.json().catch(() => null);
+                alert(`❌ Failed to close: ${err?.detail || 'Server error'}`);
+            }
+        } catch (error) {
+            console.error("Failed to close job:", error);
+        }
     };
 
     if (isLoading) {
@@ -242,6 +290,7 @@ export default function PostedJobsPage() {
                 onClose={() => setIsModalOpen(false)}
                 onSubmit={handleJobSave}
                 initialData={editingJob || undefined}
+                onDelete={handleJobDelete}
             />
 
         </main>

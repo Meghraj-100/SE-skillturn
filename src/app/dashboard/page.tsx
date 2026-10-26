@@ -25,6 +25,8 @@ interface Project {
     verification_status?: string;
     technologies: string[];
     project_link?: string;
+    faculty_feedback?: string;
+    remarks?: string;
     // AI Verification
     ai_verified?: boolean;
     ai_score?: number;
@@ -118,7 +120,8 @@ export default function DashboardPage() {
                             ai_score: p.ai_score,
                             ai_breakdown: p.ai_breakdown,
                             ai_feature_results: p.ai_feature_results || [],
-                            verified_by_name: p.verified_by_name
+                            verified_by_name: p.verified_by_name,
+                            faculty_feedback: p.faculty_feedback || p.remarks || p.feedback || null
                         }));
                         setProjects(mappedProjects);
                     }
@@ -148,6 +151,10 @@ export default function DashboardPage() {
                 } finally {
                     setLoading(false);
                 }
+            } else {
+                setSkills(mockApiResponse.skills);
+                setProjects(mockApiResponse.projects);
+                setLoading(false);
             }
         };
 
@@ -395,6 +402,33 @@ export default function DashboardPage() {
                                         ))}
                                     </div>
 
+                                    {/* Faculty Verification Feedback / Remarks */}
+                                    {(project.faculty_feedback || (project as any).remarks) && (
+                                        <div style={{
+                                            marginBottom: '1rem',
+                                            padding: '0.75rem 1rem',
+                                            borderRadius: '8px',
+                                            background: project.verification_status === 'Rejected'
+                                                ? 'rgba(244, 67, 54, 0.08)'
+                                                : 'rgba(76, 175, 80, 0.08)',
+                                            border: `1px solid ${project.verification_status === 'Rejected' ? 'rgba(244, 67, 54, 0.25)' : 'rgba(76, 175, 80, 0.25)'}`,
+                                            fontSize: '0.875rem'
+                                        }}>
+                                            <div style={{
+                                                fontWeight: 600,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                                marginBottom: '4px',
+                                                color: project.verification_status === 'Rejected' ? '#C62828' : '#2E7D32'
+                                            }}>
+                                                <span>💬</span> Faculty Remarks:
+                                            </div>
+                                            <p style={{ margin: 0, color: 'var(--md-sys-color-on-surface-variant)', lineHeight: 1.4 }}>
+                                                {project.faculty_feedback || (project as any).remarks}
+                                            </p>
+                                        </div>
+                                    )}
                                     {/* AI Feature Results Breakdown */}
                                     {project.ai_feature_results && project.ai_feature_results.length > 0 && (
                                         <div style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)', paddingTop: '0.75rem', marginTop: '0.5rem' }}>

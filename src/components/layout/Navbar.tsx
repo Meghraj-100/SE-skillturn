@@ -158,7 +158,7 @@ export const Navbar = () => {
                     fontSize: "1.2rem",
                   }}
                 >
-                  {getInitials(user.full_name)}
+                  {getInitials(user.full_name || user.name || user.username || user.email)}
                 </div>
               </div>
               <Button

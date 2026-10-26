@@ -3,33 +3,38 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
+export type Role = "student" | "faculty" | "admin" | "recruiter" | null;
+
 export interface User {
     id: string;
     username: string;
     email: string;
     full_name: string;
+    name?: string;
     role: "student" | "faculty" | "admin" | "recruiter";
-    is_active: boolean;
-    is_verified: boolean;
-    created_at: string;
+    avatarUrl?: string;
+    title?: string;
+    is_active?: boolean;
+    is_verified?: boolean;
+    created_at?: string;
 }
 
 export interface Student extends User {
-    collegeName: string;
-    degree: string;
-    branch: string;
-    yearsOfStudy: number;
-    expectedGraduationYear: number;
-    rollNumber: string;
-    collegeEmail: string;
+    collegeName?: string;
+    degree?: string;
+    branch?: string;
+    yearsOfStudy?: number;
+    expectedGraduationYear?: number;
+    rollNumber?: string;
+    collegeEmail?: string;
 }
 
 export interface Faculty extends User {
-    institution: string;
-    department: string;
-    designation: string;
-    profileLink: string;
-    experience: number;
+    institution?: string;
+    department?: string;
+    designation?: string;
+    profileLink?: string;
+    experience?: number;
 }
 
 interface RegisterData {
