@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
@@ -36,7 +37,7 @@ from database import (
     companies_collection
 )
 from CRUD import fix_mongo_id
-from ai_utils import calculate_match_score
+from ai_utils import calculate_match_score, generate_resume_markdown, markdown_to_pdf
 
 router = APIRouter()
 
@@ -294,6 +295,193 @@ async def get_app_resume_data(app_id: str, current_user: User = Depends(get_curr
         "skills": [s.get("name") for s in skills_doc.get("skills", [])] if skills_doc else [],
         "projects": verified_projects
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  AI RESUME PDF GENERATION (Ollama Cloud → Markdown → PDF)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _fetch_resume_data(app_id: str, current_user: User) -> dict:
+    """Shared helper: fetch and assemble resume data for a given application ID."""
+    if current_user.role not in ["recruiter", "admin", "student"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    try:
+        clean_app_id = app_id.strip()
+        app_obj_id = ObjectId(clean_app_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid application ID format: {e}")
+
+    app = applications_collection.find_one({"_id": app_obj_id})
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    user_id = app.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=404, detail="User ID not found in application")
+
+    user = users_collection.find_one({"_id": ObjectId(user_id)})
+    profile = student_profiles_collection.find_one({"user_id": str(user_id)})
+    skills_doc = student_skills_collection.find_one({"user_id": str(user_id)})
+    projects = get_projects_by_student(str(user_id))
+
+    verified_projects = []
+    for p in projects:
+        if (p.ai_score and p.ai_score >= 75) or p.is_verified:
+            verified_projects.append({
+                "title": p.title,
+                "description": p.description or ""
+            })
+
+    return {
+        "name": user.get("full_name", "Unknown") if user else "Unknown",
+        "email": user.get("email", "") if user else "",
+        "college": profile.get("college", "") if profile else "",
+        "degree": profile.get("degree", "") if profile else "",
+        "branch": profile.get("branch", "") if profile else "",
+        "skills": [s.get("name") for s in skills_doc.get("skills", [])] if skills_doc else [],
+        "projects": verified_projects
+    }
+
+
+@router.get("/recruiter/applications/{app_id}/resume-pdf")
+async def get_resume_pdf(app_id: str, current_user: User = Depends(get_current_active_user)):
+    """Generate an AI-formatted PDF resume for a candidate application."""
+    print(f"--- AI Resume PDF Request for AppID: '{app_id}' ---")
+
+    data = _fetch_resume_data(app_id, current_user)
+
+    # Step 1: Raw data → AI (gemma4:31b) → Markdown
+    md_content = generate_resume_markdown(data)
+    if not md_content:
+        raise HTTPException(
+            status_code=503,
+            detail="AI resume generation is unavailable. Check OLLAMA_CLOUD_API_KEY configuration."
+        )
+
+    # Step 2: Markdown → Styled PDF
+    pdf_buffer = markdown_to_pdf(md_content)
+    if not pdf_buffer:
+        raise HTTPException(status_code=500, detail="PDF generation failed.")
+
+    # Step 3: Return PDF as downloadable file
+    safe_name = data["name"].replace(" ", "_")
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_name}_AI_Resume.pdf"'
+        }
+    )
+
+
+@router.get("/recruiter/applications/{app_id}/resume-markdown")
+async def get_resume_markdown(app_id: str, current_user: User = Depends(get_current_active_user)):
+    """Generate an AI-formatted Markdown resume for preview."""
+    print(f"--- AI Resume Markdown Request for AppID: '{app_id}' ---")
+
+    data = _fetch_resume_data(app_id, current_user)
+
+    md_content = generate_resume_markdown(data)
+    if not md_content:
+        raise HTTPException(
+            status_code=503,
+            detail="AI resume generation is unavailable. Check OLLAMA_CLOUD_API_KEY configuration."
+        )
+
+    return {"markdown": md_content, "candidate_name": data["name"]}
+
+
+class ResumeDataInput(BaseModel):
+    """Schema for direct resume data submission (student dashboard)."""
+    name: str
+    email: str
+    college: str
+    degree: str
+    branch: str
+    skills: List[str] = []
+    projects: List[Dict[str, str]] = []
+
+
+class MarkdownPdfInput(BaseModel):
+    """Schema for direct markdown to PDF conversion."""
+    markdown: str
+    candidate_name: Optional[str] = "Resume"
+
+
+@router.post("/generate-resume-markdown")
+async def generate_resume_markdown_from_data(
+    payload: ResumeDataInput,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Generate AI-formatted Markdown resume from directly submitted data."""
+    print(f"--- Direct AI Resume Markdown Request for: '{payload.name}' ---")
+    data = payload.model_dump()
+    md_content = generate_resume_markdown(data)
+    if not md_content:
+        raise HTTPException(
+            status_code=503,
+            detail="AI resume generation is unavailable."
+        )
+    return {"markdown": md_content, "candidate_name": data["name"]}
+
+
+@router.post("/convert-markdown-to-pdf")
+async def convert_markdown_to_pdf_endpoint(
+    payload: MarkdownPdfInput,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Convert pre-generated Markdown resume into a styled PDF without calling LLM."""
+    print(f"--- Convert Markdown to PDF for: '{payload.candidate_name}' ---")
+    if not payload.markdown or not payload.markdown.strip():
+        raise HTTPException(status_code=400, detail="Markdown content is required.")
+
+    pdf_buffer = markdown_to_pdf(payload.markdown)
+    if not pdf_buffer:
+        raise HTTPException(status_code=500, detail="PDF generation failed.")
+
+    safe_name = (payload.candidate_name or "Resume").replace(" ", "_")
+    return Response(
+        content=pdf_buffer.getvalue(),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_name}_AI_Resume.pdf"'
+        }
+    )
+
+
+@router.post("/generate-resume-pdf")
+async def generate_resume_pdf_from_data(
+    payload: ResumeDataInput,
+    current_user: User = Depends(get_current_active_user)
+):
+    """Generate an AI-formatted PDF resume from directly submitted data."""
+    print(f"--- Direct AI Resume PDF Request for: '{payload.name}' ---")
+
+    data = payload.model_dump()
+
+    # Step 1: Raw data → AI (gemma4:31b) → Markdown
+    md_content = generate_resume_markdown(data)
+    if not md_content:
+        raise HTTPException(
+            status_code=503,
+            detail="AI resume generation is unavailable."
+        )
+
+    # Step 2: Markdown → Styled PDF
+    pdf_buffer = markdown_to_pdf(md_content)
+    if not pdf_buffer:
+        raise HTTPException(status_code=500, detail="PDF generation failed.")
+
+    safe_name = data["name"].replace(" ", "_")
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_name}_AI_Resume.pdf"'
+        }
+    )
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  RECRUITER JOB LIFECYCLE (EDIT & CLOSE)
