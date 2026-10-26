@@ -27,7 +27,6 @@ export default function FacultyForm() {
         return;
       }
     }
-
     // Validate faculty academic email domain (.edu, .ac.in, etc.)
     const emailLower = form.email.toLowerCase().trim();
     const validDomains = [".edu", ".ac.in", ".edu.in", ".ac.uk", ".edu.au"];
@@ -38,7 +37,6 @@ export default function FacultyForm() {
       setError("Please provide a valid official academic email address (e.g. ending in .edu, .ac.in, or similar educational domain).");
       return;
     }
-
     setError("");
     try {
       const token = localStorage.getItem("token");

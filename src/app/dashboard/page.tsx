@@ -429,7 +429,6 @@ export default function DashboardPage() {
                                             </p>
                                         </div>
                                     )}
-
                                     {/* AI Feature Results Breakdown */}
                                     {project.ai_feature_results && project.ai_feature_results.length > 0 && (
                                         <div style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)', paddingTop: '0.75rem', marginTop: '0.5rem' }}>
