@@ -18,7 +18,9 @@ export default function RootLayout({
       <body className="antialiased font-sans" suppressHydrationWarning>
         <Providers>
           <Navbar />
-          {children}
+          <div style={{ paddingTop: '64px' }}>
+            {children}
+          </div>
         </Providers>
       </body>
     </html>

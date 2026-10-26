@@ -6,17 +6,42 @@ export type Role = "student" | "faculty" | "recruiter" | null;
 
 export interface User {
   id: string;
-  name: string;
+  name?: string;
+  username?: string;
+  full_name?: string;
   email: string;
   role: Exclude<Role, null>;
   avatarUrl?: string;
   title?: string;
+  is_active?: boolean;
+  is_verified?: boolean;
+  created_at?: string;
+}
+
+export interface Student extends User {
+  collegeName?: string;
+  degree?: string;
+  branch?: string;
+  yearsOfStudy?: number;
+  expectedGraduationYear?: number;
+  rollNumber?: string;
+  collegeEmail?: string;
+}
+
+export interface Faculty extends User {
+  institution?: string;
+  department?: string;
+  designation?: string;
+  profileLink?: string;
+  experience?: number;
 }
 
 const MOCK_USERS: Record<Exclude<Role, null>, User> = {
   student: {
     id: "usr_student_1",
     name: "Alex Rivera",
+    username: "alex_rivera",
+    full_name: "Alex Rivera",
     email: "alex.rivera@university.edu",
     role: "student",
     title: "Computer Science Senior",
@@ -24,6 +49,8 @@ const MOCK_USERS: Record<Exclude<Role, null>, User> = {
   faculty: {
     id: "usr_faculty_1",
     name: "Dr. Sarah Chen",
+    username: "sarah_chen",
+    full_name: "Dr. Sarah Chen",
     email: "sarah.chen@university.edu",
     role: "faculty",
     title: "Professor of AI & Robotics",
@@ -31,6 +58,8 @@ const MOCK_USERS: Record<Exclude<Role, null>, User> = {
   recruiter: {
     id: "usr_recruiter_1",
     name: "Marcus Vance",
+    username: "marcus_vance",
+    full_name: "Marcus Vance",
     email: "marcus.vance@techcorp.io",
     role: "recruiter",
     title: "Lead Tech Recruiter",
