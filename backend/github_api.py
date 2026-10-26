@@ -7,9 +7,12 @@ import base64
 import json
 import os
 from typing import List, Dict, Any, Optional, Tuple
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
+load_dotenv(Path(__file__).parent / ".env")
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 # ── Config ──────────────────────────────────────────────
 GITHUB_TOKEN = os.getenv("GITHUB_API_KEY")  # matches .env key name
@@ -18,7 +21,8 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 # Use google-genai (already installed) for Gemini
 import google.generativeai as genai
 
-genai.configure(api_key=GEMINI_API_KEY)
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
 
 
 # ── GitHub Helpers ──────────────────────────────────────

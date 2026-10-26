@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { GlassContainer } from "@/components/ui/GlassContainer";
 import ScrollReveal from "@/components/ui/ScrollReveal";
 import { AnimatePresence, motion } from "framer-motion";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 // --- Mock Data ---
@@ -67,7 +67,7 @@ const SKILLS_BY_BRANCH: Record<string, string[]> = {
 const MOCK_STUDENTS: StudentProfile[] = []; // Fetched from API
 
 
-export default function StudentProfilesPage() {
+function StudentProfilesContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const collegeParam = searchParams.get('college');
@@ -628,3 +628,11 @@ const filterBadgeStyle = {
     fontSize: '0.8rem',
     fontWeight: 600
 };
+
+export default function StudentProfilesPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading student profiles...</div>}>
+            <StudentProfilesContent />
+        </Suspense>
+    );
+}

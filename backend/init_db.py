@@ -10,7 +10,10 @@ from tarfile import GNUTYPE_LONGNAME
 
 from pydantic.types import T
 from pymongo.common import RETRY_WRITES
-from backend.CRUD import get_faculty_profile
+try:
+    from CRUD import get_faculty_profile
+except ImportError:
+    from backend.CRUD import get_faculty_profile
 from database import (
     users_collection, 
     student_profiles_collection, 
