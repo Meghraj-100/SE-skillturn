@@ -6,10 +6,19 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from CRUD import retrieve_user, User  # Import from our new CRUD module
 from typing import Optional, Literal
+import os
+from pathlib import Path
+from dotenv import load_dotenv
 
-SECRET_KEY = "83daa0256a2289b0fb23693bf1f6034d44396675749244721a2b20e896e11662"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+load_dotenv()
+load_dotenv(Path(__file__).parent / ".env")
+load_dotenv(Path(__file__).parent.parent / ".env")
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY environment variable is missing. Please define it in your .env file.")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 
 class Token(BaseModel):
     access_token: str

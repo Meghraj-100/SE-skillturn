@@ -357,6 +357,64 @@ def get_projects_by_student(user_id: str) -> List[StudentProject]:
         result.append(StudentProject(**fix_mongo_id(proj)))
     return result
 
+def update_project(project_id: str, user_id: str, update_dict: dict):
+    """Update project fields for a student."""
+    from bson import ObjectId
+    try:
+        # Prevent modifying system/verified fields directly by student
+        forbidden = ["_id", "id", "user_id", "is_verified", "verified_by", "verified_at"]
+        clean_update = {k: v for k, v in update_dict.items() if k not in forbidden and v is not None}
+        clean_update["updated_at"] = datetime.utcnow()
+        
+        result = student_projects_collection.update_one(
+            {"_id": ObjectId(project_id), "user_id": user_id},
+            {"$set": clean_update}
+        )
+        if result.matched_count == 0:
+            return None
+        updated = student_projects_collection.find_one({"_id": ObjectId(project_id)})
+        return StudentProject(**fix_mongo_id(updated)) if updated else None
+    except Exception as e:
+        print(f"Error updating project {project_id}: {e}")
+        return None
+
+def delete_project(project_id: str, user_id: str) -> bool:
+    """Delete a project belonging to a student."""
+    from bson import ObjectId
+    try:
+        result = student_projects_collection.delete_one({
+            "_id": ObjectId(project_id),
+            "user_id": user_id
+        })
+        return result.deleted_count > 0
+    except Exception as e:
+        print(f"Error deleting project {project_id}: {e}")
+        return False
+
+def delete_student_skill(user_id: str, skill_identifier: str) -> Optional[StudentSkills]:
+    """Delete a skill by skill_name or skill_id from a student's profile."""
+    skills_doc = student_skills_collection.find_one({"user_id": user_id})
+    if not skills_doc:
+        return None
+    
+    current_skills = skills_doc.get("skills", [])
+    # Filter out matching skill by id or case-insensitive name
+    filtered = [
+        s for s in current_skills 
+        if s.get("id") != skill_identifier and s.get("name", "").strip().lower() != skill_identifier.strip().lower()
+    ]
+    
+    if len(filtered) == len(current_skills):
+        # Nothing removed
+        return StudentSkills(**fix_mongo_id(skills_doc))
+        
+    student_skills_collection.update_one(
+        {"user_id": user_id},
+        {"$set": {"skills": filtered, "updated_at": datetime.utcnow()}}
+    )
+    updated = student_skills_collection.find_one({"user_id": user_id})
+    return StudentSkills(**fix_mongo_id(updated)) if updated else None
+
 def update_project_verification(project_id: str, is_verified: bool, verified_by: str):
     """Update the verification status of a project."""
     from bson import ObjectId
@@ -549,6 +607,24 @@ def get_saved_jobs(user_id: str):
 
 def check_saved_job(user_id: str, job_id: str):
     return saved_jobs_collection.find_one({"user_id": user_id, "job_id": job_id}) is not None
+
+def delete_saved_job(user_id: str, job_id: str) -> bool:
+    """Remove a saved/bookmarked job for a student."""
+    result = saved_jobs_collection.delete_one({"user_id": user_id, "job_id": job_id})
+    return result.deleted_count > 0
+
+def delete_application(app_id: str, user_id: str) -> bool:
+    """Withdraw an active application for a student."""
+    from bson import ObjectId
+    try:
+        result = applications_collection.delete_one({
+            "_id": ObjectId(app_id),
+            "user_id": user_id
+        })
+        return result.deleted_count > 0
+    except Exception as e:
+        print(f"Error withdrawing application {app_id}: {e}")
+        return False
 
 # Opportunities
 def create_opportunity(opportunity: Opportunity):

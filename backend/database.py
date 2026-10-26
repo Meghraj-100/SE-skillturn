@@ -2,14 +2,16 @@ from pymongo import MongoClient
 import os
 import certifi
 
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
+load_dotenv(Path(__file__).parent / ".env")
+load_dotenv(Path(__file__).parent.parent / ".env")
 
-MONGO_DETAILS = os.getenv(
-    "MONGO_DETAILS",
-    "mongodb+srv://chaurasiakanishk666_db_user:LJa6SC9xjAJARmLi@internportal.wkf9jx4.mongodb.net/"
-)
+MONGO_DETAILS = os.getenv("MONGO_DETAILS")
+if not MONGO_DETAILS:
+    raise ValueError("MONGO_DETAILS environment variable is missing. Please define it in your .env file.")
 
 client_kwargs = {"serverSelectionTimeoutMS": 10000}
 if "mongodb+srv://" in MONGO_DETAILS or "tls=true" in MONGO_DETAILS.lower() or "ssl=true" in MONGO_DETAILS.lower():
