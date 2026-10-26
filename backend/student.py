@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 from CRUD import (
     create_student_profile, 
@@ -81,7 +81,7 @@ async def create_profile(profile: StudentProfile, current_user: User = Depends(g
     return new_profile
 
 @router.post("/student/skills", response_model=StudentSkills)
-async def add_skill(skill: SkillItem, current_user: User = Depends(get_current_active_user)):
+async def add_skill(payload: Dict[str, Any], current_user: User = Depends(get_current_active_user)):
     if current_user.role != "student":
         raise HTTPException(status_code=403, detail="Only students can add skills")
         
@@ -90,11 +90,22 @@ async def add_skill(skill: SkillItem, current_user: User = Depends(get_current_a
     if not student_skills:
         student_skills = StudentSkills(user_id=user_id, skills=[])
     
-    # Avoid duplicate additions
     existing_names = [s.name.strip().lower() for s in student_skills.skills]
-    if skill.name.strip().lower() not in existing_names:
-        student_skills.skills.append(skill)
-        update_student_skills(user_id, student_skills)
+
+    # Handle batch skills payload: {"skills": [{"name": "React"}]} or {"skills": ["React"]}
+    if "skills" in payload and isinstance(payload["skills"], list):
+        for item in payload["skills"]:
+            skill_name = item.get("name") if isinstance(item, dict) else str(item)
+            if skill_name and skill_name.strip().lower() not in existing_names:
+                student_skills.skills.append(SkillItem(name=skill_name.strip()))
+                existing_names.append(skill_name.strip().lower())
+    # Handle single skill payload: {"name": "React"}
+    elif "name" in payload and payload["name"]:
+        skill_name = str(payload["name"]).strip()
+        if skill_name.lower() not in existing_names:
+            student_skills.skills.append(SkillItem(name=skill_name))
+
+    update_student_skills(user_id, student_skills)
     return student_skills
 
 @router.delete("/student/skills/{skill_name}")
@@ -245,20 +256,38 @@ async def get_full_profile(current_user: User = Depends(get_current_active_user)
         "projects": projects_list
     }
 
+class StudentApplyRequest(BaseModel):
+    job_id: Optional[str] = None
+    opportunity_id: Optional[str] = None
+    user_id: Optional[str] = None
+
 @router.post("/student/apply")
-async def apply_opportunity(application: AppliedJob, current_user: User = Depends(get_current_active_user)):
+async def apply_opportunity(request: StudentApplyRequest, current_user: User = Depends(get_current_active_user)):
     if current_user.role != "student":
         raise HTTPException(status_code=403, detail="Only students can apply")
 
+    target_id = request.job_id or request.opportunity_id
+    if not target_id:
+        raise HTTPException(status_code=400, detail="Missing job_id or opportunity_id")
+
     # Check if already applied
-    existing = get_application_by_student_and_job(str(current_user.id), application.job_id)
+    existing = get_application_by_student_and_job(str(current_user.id), target_id)
     if existing:
          raise HTTPException(status_code=400, detail="Already applied to this opportunity")
 
-    application.user_id = str(current_user.id)
-    application.status = "applied"
-    
-    return apply_for_job(application)
+    app_data = AppliedJob(
+        user_id=str(current_user.id),
+        job_id=target_id,
+        status="applied"
+    )
+    result = apply_for_job(app_data)
+    app_id = result.get("id") if isinstance(result, dict) else (str(result.id) if hasattr(result, "id") else str(result))
+    return {
+        "message": "Application submitted successfully",
+        "application_id": app_id,
+        "id": app_id,
+        "status": "applied"
+    }
 
 @router.get("/student/applications")
 async def get_my_applications(current_user: User = Depends(get_current_active_user)):

@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, EmailStr
 import uuid
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Union, Any
 from datetime import datetime
 from database import (
     users_collection, 
@@ -51,7 +51,7 @@ class User(BaseModel):
 
 class StudentProfile(BaseModel):
     id: Optional[str] = Field(None, alias="_id")
-    user_id: str   # ref users._id
+    user_id: Optional[str] = None   # ref users._id
     college: Optional[str] = None
     degree: Optional[str] = None
     branch: Optional[str] = None
@@ -65,7 +65,7 @@ class StudentProfile(BaseModel):
 
 class FacultyProfile(BaseModel):
     id: Optional[str] = Field(None, alias="_id")
-    user_id: str   # ref users._id
+    user_id: Optional[str] = None   # ref users._id
     institute: Optional[str] = None
     department: Optional[str] = None
     designation: Optional[str] = None
@@ -100,7 +100,7 @@ class RecruiterProfile(BaseModel):
 
 # For flat frontend payload
 class RecruiterRegistrationRequest(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
     full_name: str
     designation: str
     work_email: str
@@ -144,7 +144,7 @@ class StudentProjects(BaseModel):
 # --- New Standalone StudentProject Model (individual docs per project) ---
 class StudentProject(BaseModel):
     id: Optional[str] = Field(None, alias="_id")
-    user_id: str  # student who owns this project
+    user_id: Optional[str] = None  # student who owns this project
     title: str
     description: Optional[str] = None
     project_link: Optional[str] = None  # cloud URL — GitHub, GDrive, etc.
@@ -176,7 +176,7 @@ class Job(BaseModel):
 
 class AppliedJob(BaseModel):
     id: Optional[str] = Field(None, alias="_id")
-    user_id: str # student user_id
+    user_id: Optional[str] = None # student user_id
     job_id: str
     status: Literal["applied", "shortlisted", "screening", "interview", "offer", "rejected", "selected"] = "applied"
     applied_at: datetime = Field(default_factory=datetime.utcnow)
@@ -191,17 +191,19 @@ class SavedJob(BaseModel):
 class Opportunity(BaseModel):
     id: Optional[str] = Field(None, alias="_id")
     title: str
-    type: Literal["Project", "Internship", "Job"]
+    type: str = "Internship"
     organization: str # Company Name or Faculty Name
     company_id: Optional[str] = None # Optional for Faculty projects
     description: str
     skills: List[str] = []
     location: Optional[str] = "Remote"
     salary: Optional[str] = "Unpaid"
-    posted_date: datetime = Field(default_factory=datetime.utcnow)
+    posted_date: Optional[Union[datetime, str]] = Field(default_factory=datetime.utcnow)
     deadline: Optional[str] = None # Keeping as string to match frontend "2025-12-15"
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    status: Optional[str] = "Active"
+    is_active: Optional[bool] = True
+    created_at: Optional[Union[datetime, str]] = Field(default_factory=datetime.utcnow)
+    updated_at: Optional[Union[datetime, str]] = Field(default_factory=datetime.utcnow)
 
 # --- Legacy/Course Models ---
 class Course(BaseModel):
@@ -344,7 +346,7 @@ def create_project(project: StudentProject):
     proj_dict.pop("_id", None)
     result = student_projects_collection.insert_one(proj_dict)
     proj_dict["_id"] = str(result.inserted_id)
-    return StudentProject(**proj_dict)
+    return StudentProject(**fix_mongo_id(proj_dict))
 
 def get_projects_by_student(user_id: str) -> List[StudentProject]:
     """Get all projects for a student as individual documents."""

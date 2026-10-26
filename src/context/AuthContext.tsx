@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { API_BASE_URL } from '@/lib/api';
 
 export type Role = "student" | "faculty" | "admin" | "recruiter" | null;
 
@@ -60,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
     const router = useRouter();
-    const API_URL = 'http://127.0.0.1:8000';
+    const API_URL = API_BASE_URL;
 
     const fetchUser = async (token: string): Promise<User | null> => {
         try {

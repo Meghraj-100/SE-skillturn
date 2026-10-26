@@ -7,6 +7,7 @@ import { GlassContainer } from "@/components/ui/GlassContainer";
 import { motion, AnimatePresence } from "framer-motion";
 import { JobFormModal, JobData } from "@/components/JobFormModal";
 import styles from "./PostedJobs.module.css";
+import { getApiUrl } from "@/lib/api";
 
 interface Job extends JobData {
     id: string;
@@ -34,7 +35,7 @@ export default function PostedJobsPage() {
 
     const fetchJobs = async () => {
         try {
-            const response = await fetch('http://localhost:8000/opportunities');
+            const response = await fetch(getApiUrl('/opportunities'));
             if (response.ok) {
                 const data = await response.json();
                 const dbJobs: Job[] = data.map((j: any) => ({
@@ -86,7 +87,7 @@ export default function PostedJobsPage() {
                     description: data.description
                 };
 
-                const response = await fetch(`http://localhost:8000/opportunities/${editingJob.id}`, {
+                const response = await fetch(getApiUrl(`/opportunities/${editingJob.id}`), {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
@@ -116,7 +117,7 @@ export default function PostedJobsPage() {
                     deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
                 };
 
-                const response = await fetch('http://localhost:8000/opportunities', {
+                const response = await fetch(getApiUrl('/opportunities'), {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -144,7 +145,7 @@ export default function PostedJobsPage() {
 
         try {
             // PATCH /opportunities/{id}/close - Recruiter close job
-            const res = await fetch(`http://localhost:8000/opportunities/${editingJob.id}/close`, {
+            const res = await fetch(getApiUrl(`/opportunities/${editingJob.id}/close`), {
                 method: 'PATCH',
                 headers: { 'Authorization': `Bearer ${token}` }
             });

@@ -7,7 +7,8 @@ import { GlassContainer } from "@/components/ui/GlassContainer";
 import ScrollReveal from "@/components/ui/ScrollReveal";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState, useEffect } from "react";
-import { Student } from "@/context/AuthContext";
+import { Student, useAuth } from "@/context/AuthContext";
+import { getApiUrl } from "@/lib/api";
 
 // Extended type for Dashboard purposes (Student + Application Request Info)
 interface StudentApplication extends Student {
@@ -85,6 +86,8 @@ export default function FacultyDashboardPage() {
   } | null>(null);
   const [feedbackRemarks, setFeedbackRemarks] = useState('');
 
+  const { user, loading } = useAuth();
+  const [isUnauthorized, setIsUnauthorized] = useState(false);
   const router = useRouter();
 
   // Fetch Data
@@ -94,18 +97,29 @@ export default function FacultyDashboardPage() {
       router.push('/login');
       return;
     }
+
+    if (user && user.role !== 'faculty') {
+      setIsUnauthorized(true);
+      return;
+    }
+
     try {
       const [dashRes, pendingRes, oppsRes] = await Promise.all([
-        fetch('http://127.0.0.1:8000/faculty/dashboard', {
+        fetch(getApiUrl('/faculty/dashboard'), {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch('http://127.0.0.1:8000/faculty/pending-projects', {
+        fetch(getApiUrl('/faculty/pending-projects'), {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch('http://127.0.0.1:8000/faculty/opportunities', {
+        fetch(getApiUrl('/faculty/opportunities'), {
           headers: { 'Authorization': `Bearer ${token}` }
         })
       ]);
+
+      if (dashRes.status === 403 || pendingRes.status === 403 || oppsRes.status === 403) {
+        setIsUnauthorized(true);
+        return;
+      }
 
       if (dashRes.ok) {
         const data = await dashRes.json();
@@ -165,7 +179,7 @@ export default function FacultyDashboardPage() {
     setVerifyingId(verifyTarget.id);
     try {
       if (verifyTarget.isCategorySkill) {
-        const endpoint = `http://127.0.0.1:8000/faculty/verify/skill/${verifyTarget.studentId}/${verifyTarget.id}?status=${verifyTarget.action}`;
+        const endpoint = getApiUrl(`/faculty/verify/skill/${verifyTarget.studentId}/${verifyTarget.id}?status=${verifyTarget.action}`);
         const res = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` }
@@ -179,7 +193,7 @@ export default function FacultyDashboardPage() {
         }
       } else {
         // Project verification with optional remarks/feedback
-        const endpoint = `http://127.0.0.1:8000/faculty/verify-project/${verifyTarget.id}`;
+        const endpoint = getApiUrl(`/faculty/verify-project/${verifyTarget.id}`);
         const res = await fetch(endpoint, {
           method: 'PATCH',
           headers: {
@@ -227,7 +241,7 @@ export default function FacultyDashboardPage() {
         ? postForm.skills.split(',').map(s => s.trim()).filter(Boolean)
         : [];
 
-      const res = await fetch('http://127.0.0.1:8000/faculty/opportunities', {
+      const res = await fetch(getApiUrl('/faculty/opportunities'), {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -272,6 +286,29 @@ export default function FacultyDashboardPage() {
   };
 
   const selectedApp = applications.find(s => s.id === selectedAppId);
+
+  if (isUnauthorized || (!loading && user && user.role !== 'faculty')) {
+    return (
+      <main style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
+        <GlassContainer style={{ maxWidth: '540px', textAlign: 'center', padding: '3rem 2rem' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🎓🔒</div>
+          <h2 style={{ fontSize: '1.6rem', fontWeight: 700, marginBottom: '0.75rem' }}>Faculty Access Only</h2>
+          <p style={{ color: 'var(--md-sys-color-secondary)', marginBottom: '1.5rem', lineHeight: '1.6' }}>
+            This portal is restricted to verified Faculty members for academic review and project verification. 
+            You are currently logged in as a <strong>{user?.role || 'different role'}</strong>.
+          </p>
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Button variant="filled" onClick={() => router.push(user?.role === 'recruiter' ? '/recruiter_dashboard' : '/dashboard')}>
+              Go to My Dashboard
+            </Button>
+            <Button variant="outlined" onClick={() => router.push('/login')}>
+              Switch Account
+            </Button>
+          </div>
+        </GlassContainer>
+      </main>
+    );
+  }
 
   return (
     <main style={{ padding: '2rem 24px', maxWidth: '1200px', margin: '0 auto', minHeight: '100vh' }}>

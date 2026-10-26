@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { FormInput } from "@/components/ui/FormInput";
+import { getApiUrl } from "@/lib/api";
 
 export default function FacultyForm() {
   const [form, setForm] = useState({
@@ -45,7 +46,7 @@ export default function FacultyForm() {
         return;
       }
 
-      const response = await fetch("http://localhost:8000/faculty/profile", {
+      const response = await fetch(getApiUrl("/faculty/profile"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -6,6 +6,7 @@ import { FormInput } from "@/components/ui/FormInput";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import Link from "next/link";
+import { getApiUrl } from "@/lib/api";
 
 export default function OrganizationSignupPage() {
     const router = useRouter();
@@ -31,7 +32,7 @@ export default function OrganizationSignupPage() {
         setIsLoading(true);
 
         try {
-            const response = await fetch("http://localhost:8000/companies", {
+            const response = await fetch(getApiUrl("/companies"), {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

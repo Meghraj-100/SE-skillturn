@@ -32,7 +32,8 @@ from database import (
     student_profiles_collection,
     student_skills_collection,
     student_projects_collection,
-    opportunities_collection
+    opportunities_collection,
+    companies_collection
 )
 from CRUD import fix_mongo_id
 from ai_utils import calculate_match_score
@@ -199,7 +200,7 @@ async def get_dashboard(current_user: User = Depends(get_current_active_user)):
         "companyName": "TechCorp" # Should fetch company name
     }
 
-@router.post("/recruiter/opportunities", response_model=Opportunity)
+@router.post("/recruiter/opportunities")
 async def post_opportunity(opp: Opportunity, current_user: User = Depends(get_current_active_user)):
     recruiter = get_recruiter_profile(str(current_user.id))
     if not recruiter:
@@ -209,7 +210,10 @@ async def post_opportunity(opp: Opportunity, current_user: User = Depends(get_cu
     opp.company_id = recruiter.company_id
     opp.organization = opp.organization # Or override with company name
     
-    return create_opportunity(opp)
+    created = create_opportunity(opp)
+    if isinstance(created, dict):
+        return fix_mongo_id(created)
+    return fix_mongo_id(created.dict(by_alias=True))
 
 @router.patch("/recruiter/applications/{app_id}/status")
 async def update_status(app_id: str, status_update: Dict[str, str], current_user: User = Depends(get_current_active_user)):
@@ -612,4 +616,22 @@ async def get_recruiter_analytics(current_user: User = Depends(get_current_activ
         "activeJobs": active_jobs,
         "selectedCount": selected_count
     }
+
+@router.post("/companies")
+async def register_company_endpoint(company_data: Company):
+    if not company_data.name or not company_data.name.strip():
+        raise HTTPException(status_code=400, detail="Company name is required")
+    created = create_company(company_data)
+    if isinstance(created, dict):
+        return created
+    return fix_mongo_id(created.dict(by_alias=True))
+
+@router.get("/companies")
+async def list_companies_endpoint():
+    cursor = companies_collection.find()
+    companies = []
+    for c in cursor:
+        companies.append(fix_mongo_id(c))
+    return companies
+
 

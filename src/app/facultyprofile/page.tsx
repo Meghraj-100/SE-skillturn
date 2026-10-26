@@ -6,6 +6,7 @@ import ScrollReveal from "@/components/ui/ScrollReveal";
 import { useAuth } from "@/context/AuthContext";
 import { Faculty } from "@/context/AuthContext";
 import { useState, useEffect } from "react";
+import { getApiUrl } from "@/lib/api";
 
 export default function FacultyProfilePage() {
     const { user } = useAuth();
@@ -21,7 +22,7 @@ export default function FacultyProfilePage() {
             }
 
             try {
-                const response = await fetch('http://localhost:8000/faculty/profile', {
+                const response = await fetch(getApiUrl('/faculty/profile'), {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
