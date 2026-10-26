@@ -2,10 +2,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from login import router as auth_router
 from register import router as register_router
-from student import router as student_router
-from faculty import router as faculty_router
-from recruiter import router as recruiter_router
-from opportunities import router as opportunities_router
 
 app = FastAPI()
 
@@ -24,10 +20,30 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(register_router)
-app.include_router(student_router)
-app.include_router(faculty_router)
-app.include_router(recruiter_router)
-app.include_router(opportunities_router)
+
+try:
+    from student import router as student_router
+    app.include_router(student_router)
+except ImportError:
+    pass
+
+try:
+    from faculty import router as faculty_router
+    app.include_router(faculty_router)
+except ImportError:
+    pass
+
+try:
+    from recruiter import router as recruiter_router
+    app.include_router(recruiter_router)
+except ImportError:
+    pass
+
+try:
+    from opportunities import router as opportunities_router
+    app.include_router(opportunities_router)
+except ImportError:
+    pass
 
 @app.get("/")
 def read_root():

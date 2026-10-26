@@ -1,7 +1,7 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+studentPortal/
 
 # next.js
 /.next/
@@ -48,3 +49,12 @@ __pycache__/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Documentation, PDFs & Schemas
+*jmeter*.pdf
+*skillturn*.pdf
+*.pdf
+schema.md
+**/schema.md
+Backend/schema.md
+task-distribution.md
