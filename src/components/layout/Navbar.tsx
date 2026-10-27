@@ -98,17 +98,6 @@ export const Navbar = () => {
             </Link>
           )}
           {!user && (
-            <Link href="/dashboard">
-              <motion.div
-                className={styles.liquidLink}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
-                Dashboard
-              </motion.div>
-            </Link>
-          )}
-          {!user && (
             <Link href="/opportunities">
               <motion.div
                 className={styles.liquidLink}
@@ -272,15 +261,6 @@ export const Navbar = () => {
           </Link>
         )}
         {user?.role == "student" && (
-          <Link
-            href="/dashboard"
-            className={styles.liquidLink}
-            onClick={toggleMenu}
-          >
-            Dashboard
-          </Link>
-        )}
-        {!user && (
           <Link
             href="/dashboard"
             className={styles.liquidLink}

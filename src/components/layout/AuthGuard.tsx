@@ -8,10 +8,16 @@ const protectedRoutes = [
   "/dashboard",
   "/facultydash",
   "/facultyprofile",
-  "/opportunities",
+  "/recruiter_dashboard",
+  "/recruiterAnalytics",
+  "/r-posted_jobs",
+  "/resume",
   "/roles",
   "/forms",
-  "/studentForm"
+  "/studentForm",
+  "/studentProfiles",
+  "/add-project",
+  "/add-skill"
 ];
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -19,24 +25,46 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
-  useEffect(() => {
-    if (!loading) {
-      const isProtected = protectedRoutes.some(route => pathname.startsWith(route));
-      if (isProtected && !user) {
-        router.push("/");
-      }
-    }
-  }, [user, loading, pathname, router]);
-
   const isProtected = protectedRoutes.some(route => pathname.startsWith(route));
 
-  // If on a protected route and still loading auth state, show nothing or a spinner
+  useEffect(() => {
+    if (!loading && isProtected && !user) {
+      router.push("/login");
+    }
+  }, [user, loading, isProtected, router]);
+
+  // If on a protected route and still loading auth state, show a clean loading spinner
   if (isProtected && loading) {
-    return null; // Or return a loading spinner if preferred
+    return (
+      <div style={{
+        display: "flex",
+        height: "80vh",
+        alignItems: "center",
+        justifyContent: "center",
+        flexDirection: "column",
+        gap: "16px",
+        color: "var(--md-sys-color-on-surface, #fff)"
+      }}>
+        <div style={{
+          width: "48px",
+          height: "48px",
+          borderRadius: "50%",
+          border: "3px solid rgba(168, 85, 247, 0.2)",
+          borderTopColor: "#a855f7",
+          animation: "spin 1s linear infinite"
+        }} />
+        <p style={{ margin: 0, opacity: 0.8, fontSize: "0.95rem" }}>Authenticating...</p>
+        <style jsx>{`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    );
   }
 
-  // If on a protected route and finished loading but no user, render nothing (useEffect will redirect)
-  // This prevents flash of content before redirect
+  // If on a protected route and finished loading but no user, render nothing (useEffect will redirect to /login)
   if (isProtected && !loading && !user) {
     return null;
   }

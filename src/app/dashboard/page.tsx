@@ -7,6 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { StudentSkillModal } from "@/components/StudentSkillModal";
 import { ResumeModal } from "@/components/ResumeModal";
 
@@ -48,7 +49,8 @@ interface Project {
 
 export default function DashboardPage() {
     const [selectedId, setSelectedId] = useState<string | null>(null);
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
+    const router = useRouter();
     const [appliedOpportunities, setAppliedOpportunities] = useState<any[]>([]);
     const [pastOpportunities, setPastOpportunities] = useState<any[]>([]);
     const [skills, setSkills] = useState<Skill[]>([]);
@@ -58,108 +60,91 @@ export default function DashboardPage() {
     const [isResumeModalOpen, setIsResumeModalOpen] = useState(false);
     const [profile, setProfile] = useState<any>(null);
 
-    // Mock JSON Data simulating API response (skills/projects handled by real endpoints above)
-    const mockApiResponse = {
-        skills: [
-            { id: 's1', name: 'React', verified: true },
-            { id: 's2', name: 'TypeScript', verified: true },
-            { id: 's3', name: 'Node.js', verified: false },
-            { id: 's4', name: 'Python', verified: true },
-            { id: 's5', name: 'Machine Learning', verified: false },
-        ],
-        projects: [
-            {
-                id: 'p1',
-                title: 'E-Commerce Platform',
-                description: 'A full-stack e-commerce application with payment gateway integration.',
-                verified: true,
-                technologies: ['React', 'Node.js', 'Stripe']
-            },
-            {
-                id: 'p2',
-                title: 'Portfolio Website',
-                description: 'Personal portfolio website to showcase skills and projects.',
-                verified: false,
-                technologies: ['Next.js', 'Tailwind CSS']
-            }
-        ]
-    };
-
-    // Simulate API Call
-
     useEffect(() => {
+        // Wait until auth state is initialized
+        if (authLoading) return;
+
+        const token = localStorage.getItem('token');
+        if (!token || !user) {
+            router.push('/login');
+            return;
+        }
+
+        // Redirect non-students to their respective dashboards
+        if (user.role === 'recruiter') {
+            router.push('/recruiter_dashboard');
+            return;
+        }
+        if (user.role === 'faculty') {
+            router.push('/facultydash');
+            return;
+        }
+
         const fetchData = async () => {
-            const token = localStorage.getItem('token');
-            if (token) {
-                setLoading(true);
-                try {
-                    const res = await fetch('http://127.0.0.1:8000/student/full-profile', {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    if (res.ok) {
-                        const data = await res.json();
-                        // Map Skills
-                        const mappedSkills = data.skills.map((s: any) => ({
-                            id: s.id,
-                            name: s.name,
-                            verified: s.verification_status === 'Verified' || s.verification_status === 'Approved',
-                            verification_status: s.verification_status === 'Approved' ? 'Verified' : s.verification_status
-                        }));
-                        setSkills(mappedSkills);
+            setLoading(true);
+            try {
+                const res = await fetch('http://127.0.0.1:8000/student/full-profile', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    // Map Skills
+                    const mappedSkills = (data.skills || []).map((s: any) => ({
+                        id: s.id,
+                        name: s.name,
+                        verified: s.verification_status === 'Verified' || s.verification_status === 'Approved',
+                        verification_status: s.verification_status === 'Approved' ? 'Verified' : s.verification_status
+                    }));
+                    setSkills(mappedSkills);
 
-                        // Map Projects
-                        const mappedProjects = data.projects.map((p: any) => ({
-                            id: p.id,
-                            title: p.title,
-                            description: p.description,
-                            verified: p.is_verified || p.verification_status === 'Verified' || p.verification_status === 'Approved',
-                            verification_status: (p.verification_status === 'Approved' ? 'Verified' : p.verification_status) || (p.is_verified ? 'Verified' : 'Pending'),
-                            technologies: p.technologies || [],
-                            project_link: p.project_link || '',
-                            ai_verified: p.ai_verified || false,
-                            ai_score: p.ai_score,
-                            ai_breakdown: p.ai_breakdown,
-                            ai_feature_results: p.ai_feature_results || [],
-                            verified_by_name: p.verified_by_name,
-                            faculty_feedback: p.faculty_feedback || p.remarks || p.feedback || null
-                        }));
-                        setProjects(mappedProjects);
-                    }
-
-                    // Fetch Full Profile
-                    const profileResp = await fetch('http://127.0.0.1:8000/student/profile', {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    if (profileResp.ok) {
-                        const data = await profileResp.json();
-                        setProfile(data);
-                    }
-
-                    // Fetch real applications from backend
-                    const appsResp = await fetch('http://127.0.0.1:8000/student/applications', {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    if (appsResp.ok) {
-                        const apps = await appsResp.json();
-                        const active = apps.filter((a: any) => ['Applied', 'Shortlisted', 'Screening', 'Interview', 'Offer'].includes(a.status));
-                        const past = apps.filter((a: any) => ['Rejected', 'Selected', 'Completed'].includes(a.status));
-                        setAppliedOpportunities(active);
-                        setPastOpportunities(past);
-                    }
-                } catch (error) {
-                    console.error("Failed to fetch dashboard data:", error);
-                } finally {
-                    setLoading(false);
+                    // Map Projects
+                    const mappedProjects = (data.projects || []).map((p: any) => ({
+                        id: p.id,
+                        title: p.title,
+                        description: p.description,
+                        verified: p.is_verified || p.verification_status === 'Verified' || p.verification_status === 'Approved',
+                        verification_status: (p.verification_status === 'Approved' ? 'Verified' : p.verification_status) || (p.is_verified ? 'Verified' : 'Pending'),
+                        technologies: p.technologies || [],
+                        project_link: p.project_link || '',
+                        ai_verified: p.ai_verified || false,
+                        ai_score: p.ai_score,
+                        ai_breakdown: p.ai_breakdown,
+                        ai_feature_results: p.ai_feature_results || [],
+                        verified_by_name: p.verified_by_name,
+                        faculty_feedback: p.faculty_feedback || p.remarks || p.feedback || null
+                    }));
+                    setProjects(mappedProjects);
                 }
-            } else {
-                setSkills(mockApiResponse.skills);
-                setProjects(mockApiResponse.projects);
+
+                // Fetch Full Profile
+                const profileResp = await fetch('http://127.0.0.1:8000/student/profile', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (profileResp.ok) {
+                    const data = await profileResp.json();
+                    setProfile(data);
+                }
+
+                // Fetch real applications from backend
+                const appsResp = await fetch('http://127.0.0.1:8000/student/applications', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (appsResp.ok) {
+                    const apps = await appsResp.json();
+                    const active = apps.filter((a: any) => ['Applied', 'Shortlisted', 'Screening', 'Interview', 'Offer'].includes(a.status));
+                    const past = apps.filter((a: any) => ['Rejected', 'Selected', 'Completed'].includes(a.status));
+                    setAppliedOpportunities(active);
+                    setPastOpportunities(past);
+                }
+            } catch (error) {
+                console.error("Failed to fetch dashboard data:", error);
+            } finally {
                 setLoading(false);
             }
         };
 
         fetchData();
-    }, []);
+    }, [user, authLoading, router]);
 
     const updateSkills = async (newSkillNames: string[]) => {
         const token = localStorage.getItem('token');
@@ -198,7 +183,7 @@ export default function DashboardPage() {
         }
     };
 
-    if (loading) {
+    if (authLoading || (loading && !profile && skills.length === 0 && projects.length === 0)) {
         return (
             <main style={{ padding: '2rem 24px', maxWidth: '1200px', margin: '0 auto', minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                 <div style={{ textAlign: 'center' }}>
@@ -220,6 +205,10 @@ export default function DashboardPage() {
                 </div>
             </main>
         );
+    }
+
+    if (!user) {
+        return null;
     }
 
     return (
@@ -292,35 +281,41 @@ export default function DashboardPage() {
                             </Button>
                         </div>
                         <Card variant="outlined" style={{ padding: '2rem' }}>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
-                                {skills.map(skill => (
-                                    <div
-                                        key={skill.id}
-                                        title={skill.verification_status || "Pending"}
-                                        style={{
-                                            padding: '8px 16px',
-                                            borderRadius: '24px',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '8px',
-                                            fontSize: '1rem',
-                                            fontWeight: 500,
-                                            background: skill.verification_status === 'Verified' ? 'rgba(76, 175, 80, 0.1)' : skill.verification_status === 'Rejected' ? 'rgba(244, 67, 54, 0.1)' : 'rgba(255, 193, 7, 0.1)',
-                                            border: `1px solid ${skill.verification_status === 'Verified' ? '#4CAF50' : skill.verification_status === 'Rejected' ? '#F44336' : '#FFC107'}`,
-                                            color: 'var(--md-sys-color-on-surface)'
-                                        }}
-                                    >
-                                        {skill.name}
-                                        {skill.verification_status === 'Verified' ? (
-                                            <span style={{ color: '#4CAF50', fontSize: '1.1rem' }}>✓</span>
-                                        ) : skill.verification_status === 'Rejected' ? (
-                                            <span style={{ color: '#F44336', fontSize: '1.1rem' }}>✕</span>
-                                        ) : (
-                                            <span style={{ color: '#FFC107', fontSize: '1.1rem' }}>●</span>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
+                            {skills.length === 0 ? (
+                                <p style={{ margin: 0, color: 'var(--md-sys-color-secondary)', fontSize: '0.95rem' }}>
+                                    No skills added yet. Click &quot;+ Add New Skill&quot; to showcase your technical stack.
+                                </p>
+                            ) : (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
+                                    {skills.map(skill => (
+                                        <div
+                                            key={skill.id}
+                                            title={skill.verification_status || "Pending"}
+                                            style={{
+                                                padding: '8px 16px',
+                                                borderRadius: '24px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px',
+                                                fontSize: '1rem',
+                                                fontWeight: 500,
+                                                background: skill.verification_status === 'Verified' ? 'rgba(76, 175, 80, 0.1)' : skill.verification_status === 'Rejected' ? 'rgba(244, 67, 54, 0.1)' : 'rgba(255, 193, 7, 0.1)',
+                                                border: `1px solid ${skill.verification_status === 'Verified' ? '#4CAF50' : skill.verification_status === 'Rejected' ? '#F44336' : '#FFC107'}`,
+                                                color: 'var(--md-sys-color-on-surface)'
+                                            }}
+                                        >
+                                            {skill.name}
+                                            {skill.verification_status === 'Verified' ? (
+                                                <span style={{ color: '#4CAF50', fontSize: '1.1rem' }}>✓</span>
+                                            ) : skill.verification_status === 'Rejected' ? (
+                                                <span style={{ color: '#F44336', fontSize: '1.1rem' }}>✕</span>
+                                            ) : (
+                                                <span style={{ color: '#FFC107', fontSize: '1.1rem' }}>●</span>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </Card>
                     </section>
                 </ScrollReveal>
@@ -337,8 +332,23 @@ export default function DashboardPage() {
                                 <Button variant="outlined" style={{ padding: '8px 16px', fontSize: '0.9rem' }}>+ Add New Project</Button>
                             </Link>
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
-                            {projects.map(project => (
+                        {projects.length === 0 ? (
+                            <Card variant="outlined" style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--md-sys-color-secondary)' }}>
+                                <p style={{ margin: '0 0 0.5rem 0', fontSize: '1.05rem', fontWeight: 500, color: 'var(--md-sys-color-on-surface)' }}>
+                                    No projects added yet
+                                </p>
+                                <p style={{ margin: '0 0 1.5rem 0', fontSize: '0.9rem' }}>
+                                    Add your projects to get them verified by faculty or AI and build your professional resume.
+                                </p>
+                                <Link href="/add-project">
+                                    <Button variant="filled" style={{ padding: '8px 20px', fontSize: '0.9rem' }}>
+                                        + Add Your First Project
+                                    </Button>
+                                </Link>
+                            </Card>
+                        ) : (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
+                                {projects.map(project => (
                                 <Card key={project.id} variant="elevated" style={{ padding: '1.5rem', position: 'relative' }}>
                                     {/* Dual Verification Badges */}
                                     <div style={{ position: 'absolute', top: '1.5rem', right: '1.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -511,6 +521,7 @@ export default function DashboardPage() {
                                 </Card>
                             ))}
                         </div>
+                        )}
                     </section>
                 </ScrollReveal>
             </div>
@@ -521,41 +532,51 @@ export default function DashboardPage() {
                         <span style={{ width: '8px', height: '32px', background: 'var(--md-sys-color-primary)', borderRadius: '4px' }}></span>
                         Active Applications
                     </h2>
-                    <div style={{ display: 'grid', gap: '1.5rem' }}>
-                        {appliedOpportunities.map(opp => (
-                            <motion.div
-                                layoutId={`dashboard-${opp.id}`}
-                                key={opp.id}
-                                onClick={() => setSelectedId(`dashboard-${opp.id}`)}
-                                style={{ cursor: 'pointer' }}
-                                whileHover={{ scale: 1.01 }}
-                                whileTap={{ scale: 0.99 }}
-                            >
-                                <Card variant="elevated" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', pointerEvents: 'none' }}>
-                                    <div>
-                                        <motion.h3 style={{ fontSize: '1.25rem', marginBottom: '0.25rem' }}>{opp.title}</motion.h3>
-                                        <motion.p style={{ color: 'var(--md-sys-color-secondary)' }}>{opp.organization}</motion.p>
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-                                        <div style={{ textAlign: 'right' }}>
-                                            <span style={{ display: 'block', fontSize: '0.875rem', color: 'var(--md-sys-color-secondary)' }}>Status</span>
-                                            <span style={{
-                                                fontWeight: 600,
-                                                color: (opp.status === 'Shortlisted' || opp.status === 'Selected' || opp.status === 'Offer')
-                                                    ? '#4CAF50'
-                                                    : (opp.status === 'Screening' || opp.status === 'Interview')
-                                                        ? 'var(--md-sys-color-tertiary)'
-                                                        : 'var(--md-sys-color-primary)'
-                                            }}>
-                                                {opp.status}
-                                            </span>
+                    {appliedOpportunities.length === 0 ? (
+                        <Card variant="outlined" style={{ padding: '2rem', textAlign: 'center', color: 'var(--md-sys-color-secondary)' }}>
+                            <p style={{ margin: '0 0 0.5rem 0', fontSize: '1rem', color: 'var(--md-sys-color-on-surface)' }}>No active applications</p>
+                            <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.85rem' }}>Explore verified openings and apply with your profile and AI resume.</p>
+                            <Link href="/opportunities">
+                                <Button variant="outlined" style={{ padding: '8px 20px', fontSize: '0.9rem' }}>Browse Opportunities</Button>
+                            </Link>
+                        </Card>
+                    ) : (
+                        <div style={{ display: 'grid', gap: '1.5rem' }}>
+                            {appliedOpportunities.map(opp => (
+                                <motion.div
+                                    layoutId={`dashboard-${opp.id}`}
+                                    key={opp.id}
+                                    onClick={() => setSelectedId(`dashboard-${opp.id}`)}
+                                    style={{ cursor: 'pointer' }}
+                                    whileHover={{ scale: 1.01 }}
+                                    whileTap={{ scale: 0.99 }}
+                                >
+                                    <Card variant="elevated" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', pointerEvents: 'none' }}>
+                                        <div>
+                                            <motion.h3 style={{ fontSize: '1.25rem', marginBottom: '0.25rem' }}>{opp.title}</motion.h3>
+                                            <motion.p style={{ color: 'var(--md-sys-color-secondary)' }}>{opp.organization}</motion.p>
                                         </div>
-                                        <Button variant="glass" style={{ pointerEvents: 'auto' }}>View Status</Button>
-                                    </div>
-                                </Card>
-                            </motion.div>
-                        ))}
-                    </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+                                            <div style={{ textAlign: 'right' }}>
+                                                <span style={{ display: 'block', fontSize: '0.875rem', color: 'var(--md-sys-color-secondary)' }}>Status</span>
+                                                <span style={{
+                                                    fontWeight: 600,
+                                                    color: (opp.status === 'Shortlisted' || opp.status === 'Selected' || opp.status === 'Offer')
+                                                        ? '#4CAF50'
+                                                        : (opp.status === 'Screening' || opp.status === 'Interview')
+                                                            ? 'var(--md-sys-color-tertiary)'
+                                                            : 'var(--md-sys-color-primary)'
+                                                }}>
+                                                    {opp.status}
+                                                </span>
+                                            </div>
+                                            <Button variant="glass" style={{ pointerEvents: 'auto' }}>View Status</Button>
+                                        </div>
+                                    </Card>
+                                </motion.div>
+                            ))}
+                        </div>
+                    )}
                 </section>
             </ScrollReveal>
 
@@ -565,34 +586,40 @@ export default function DashboardPage() {
                         <span style={{ width: '8px', height: '32px', background: 'var(--md-sys-color-secondary)', borderRadius: '4px' }}></span>
                         Past Opportunities
                     </h2>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '2rem' }}>
-                        {pastOpportunities.map(opp => (
-                            <motion.div
-                                layoutId={`past-${opp.id}`}
-                                key={opp.id}
-                                onClick={() => setSelectedId(`past-${opp.id}`)}
-                                style={{ cursor: 'pointer', height: '100%' }}
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
-                            >
-                                <Card variant="elevated" style={{ height: '100%', pointerEvents: 'none', position: 'relative', overflow: 'hidden' }}>
-                                    <div style={{
-                                        position: 'absolute', top: 0, right: 0, padding: '4px 12px',
-                                        background: (opp.status === 'Completed' || opp.status === 'Selected') ? '#E8F5E9' : opp.status === 'Rejected' ? '#FFEBEE' : '#F3F4F6',
-                                        color: (opp.status === 'Completed' || opp.status === 'Selected') ? '#2E7D32' : opp.status === 'Rejected' ? '#C62828' : '#374151',
-                                        borderBottomLeftRadius: '12px', fontSize: '0.8rem', fontWeight: 600
-                                    }}>
-                                        {opp.status}
-                                    </div>
-                                    <motion.h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem', paddingRight: '2rem' }}>{opp.title}</motion.h3>
-                                    <motion.p style={{ color: 'var(--md-sys-color-secondary)', marginBottom: '1rem' }}>{opp.organization}</motion.p>
-                                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto' }}>
-                                        <Button variant="glass" style={{ pointerEvents: 'auto', width: '100%' }}>View Details</Button>
-                                    </div>
-                                </Card>
-                            </motion.div>
-                        ))}
-                    </div>
+                    {pastOpportunities.length === 0 ? (
+                        <Card variant="outlined" style={{ padding: '2rem', textAlign: 'center', color: 'var(--md-sys-color-secondary)' }}>
+                            <p style={{ margin: 0, fontSize: '0.95rem' }}>No past application records yet.</p>
+                        </Card>
+                    ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '2rem' }}>
+                            {pastOpportunities.map(opp => (
+                                <motion.div
+                                    layoutId={`past-${opp.id}`}
+                                    key={opp.id}
+                                    onClick={() => setSelectedId(`past-${opp.id}`)}
+                                    style={{ cursor: 'pointer', height: '100%' }}
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.98 }}
+                                >
+                                    <Card variant="elevated" style={{ height: '100%', pointerEvents: 'none', position: 'relative', overflow: 'hidden' }}>
+                                        <div style={{
+                                            position: 'absolute', top: 0, right: 0, padding: '4px 12px',
+                                            background: (opp.status === 'Completed' || opp.status === 'Selected') ? '#E8F5E9' : opp.status === 'Rejected' ? '#FFEBEE' : '#F3F4F6',
+                                            color: (opp.status === 'Completed' || opp.status === 'Selected') ? '#2E7D32' : opp.status === 'Rejected' ? '#C62828' : '#374151',
+                                            borderBottomLeftRadius: '12px', fontSize: '0.8rem', fontWeight: 600
+                                        }}>
+                                            {opp.status}
+                                        </div>
+                                        <motion.h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem', paddingRight: '2rem' }}>{opp.title}</motion.h3>
+                                        <motion.p style={{ color: 'var(--md-sys-color-secondary)', marginBottom: '1rem' }}>{opp.organization}</motion.p>
+                                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto' }}>
+                                            <Button variant="glass" style={{ pointerEvents: 'auto', width: '100%' }}>View Details</Button>
+                                        </div>
+                                    </Card>
+                                </motion.div>
+                            ))}
+                        </div>
+                    )}
                 </section>
             </ScrollReveal>
 
